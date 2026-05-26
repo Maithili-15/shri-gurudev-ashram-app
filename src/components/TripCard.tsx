@@ -1,6 +1,5 @@
 import React from 'react'
-import { View, Text, Pressable } from 'react-native'
-import { Image } from 'expo-image'
+import { View, Text, Pressable, ImageBackground } from 'react-native'
 
 type Props = {
   title: string
@@ -11,15 +10,14 @@ type Props = {
 
 const TripCard: React.FC<Props> = ({ title, dateRange, image, status }) => {
   return (
-    <Pressable className="mb-4 rounded-xl overflow-hidden shadow-sm bg-white">
-      <View className="h-44 w-full bg-gray-200">
-        <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+    <Pressable className="mb-4 rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(91,70,54,0.05)] bg-white">
+      <ImageBackground source={{ uri: image }} style={{ width: '100%', height: 180 }} imageStyle={{ resizeMode: 'cover' }}>
         {status ? (
           <View className="absolute top-3 right-3 bg-white/90 px-3 py-1 rounded-full">
             <Text className="text-xs text-primary">{status}</Text>
           </View>
         ) : null}
-      </View>
+      </ImageBackground>
       <View className="p-4">
         <Text className="text-lg font-display text-text-charcoal mb-1">{title}</Text>
         <View className="flex-row items-center gap-3 text-secondary">

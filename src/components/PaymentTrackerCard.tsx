@@ -1,12 +1,18 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { View, Text, Animated } from 'react-native'
 
 const PaymentTrackerCard: React.FC = () => {
   const progress = 0.65
-  const width = `${Math.round(progress * 100)}%`
+  const anim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Animated.timing(anim, { toValue: progress, duration: 900, useNativeDriver: false }).start()
+  }, [anim])
+
+  const widthInterpolated = anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
 
   return (
-    <View className="rounded-xl p-6 bg-surface-container-low border border-outline-variant/20 shadow-sm">
+    <View className="rounded-xl p-6 glass-card border border-outline-variant/20 shadow-sm bg-surface-container-low">
       <View className="flex-row justify-between items-center mb-4">
         <View>
           <Text className="text-xs text-primary uppercase">Payment Tracker</Text>
@@ -23,7 +29,7 @@ const PaymentTrackerCard: React.FC = () => {
           <Text className="text-sm text-text-charcoal/70">₹1,95,000 / ₹3,00,000</Text>
         </View>
         <View className="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
-          <Animated.View style={{ width }} className="bg-saffron-light h-full rounded-full" />
+          <Animated.View style={{ width: widthInterpolated }} className="bg-saffron-light h-full rounded-full shadow-md" />
         </View>
       </View>
 

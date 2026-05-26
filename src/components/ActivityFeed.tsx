@@ -15,8 +15,8 @@ const ActivityFeed: React.FC = () => {
         data={DATA}
         keyExtractor={(i) => i.id}
         renderItem={({ item }) => (
-          <View className="flex-row gap-3 mb-3">
-            <View className="w-10 h-10 rounded-full bg-saffron-light/10 items-center justify-center">
+          <View className="flex-row gap-3 mb-3 items-start">
+            <View className="w-10 h-10 rounded-full bg-saffron-light/10 items-center justify-center flex-shrink-0">
               <Text className="text-saffron-light">★</Text>
             </View>
             <View className="flex-1">
@@ -25,7 +25,11 @@ const ActivityFeed: React.FC = () => {
             </View>
           </View>
         )}
+        ItemSeparatorComponent={() => <View className="h-2" />}
       />
+      <View className="mt-3">
+        <Text className="text-center text-sm text-primary">View History</Text>
+      </View>
     </View>
   )
 }
