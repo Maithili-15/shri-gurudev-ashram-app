@@ -30,7 +30,7 @@ export default function BookingHistoryScreen() {
           <View style={styles.avatar} />
         </View>
 
-        <Text style={styles.subtitle}>A warm archive of your previous pilgrimage bookings.</Text>
+        <Text style={styles.subtitle}>A warm archive of your previous sadhak bookings.</Text>
 
         <FlatList
           data={bookingHistory}

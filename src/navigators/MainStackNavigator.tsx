@@ -5,12 +5,16 @@ import SettingsScreen from '../screens/main/SettingsScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
 import CollectorDashboardScreen from '../screens/collector/CollectorDashboardScreen';
 import CollectorVerificationScreen from '../screens/collector/CollectorVerificationScreen';
+import CollectorTravelerScreen from '../screens/collector/CollectorTravelerScreen';
+import CollectorAnalyticsScreen from '../screens/collector/CollectorAnalyticsScreen';
 
 export type MainStackParamList = {
   MainTabs: undefined;
   Settings: undefined;
   HelpSupport: undefined;
   CollectorDashboard: undefined;
+  CollectorTraveler: { travelerId: string };
+  CollectorAnalytics: undefined;
   CollectorVerification: { bookingId: string };
 };
 
@@ -24,6 +28,8 @@ export default function MainStackNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="CollectorDashboard" component={CollectorDashboardScreen} />
+      <Stack.Screen name="CollectorTraveler" component={CollectorTravelerScreen} />
+      <Stack.Screen name="CollectorAnalytics" component={CollectorAnalyticsScreen} />
       <Stack.Screen name="CollectorVerification" component={CollectorVerificationScreen} />
     </Stack.Navigator>
   );

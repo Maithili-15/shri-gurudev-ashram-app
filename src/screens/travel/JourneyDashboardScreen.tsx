@@ -235,7 +235,7 @@ export default function JourneyDashboardScreen() {
           <View style={styles.quickActionsCard}>
             <View style={styles.quickActionsInner}>
               <Text style={styles.quickTitle}>Plan your next journey?</Text>
-              <Text style={styles.quickText}>Explore upcoming winter retreats and pilgrimages.</Text>
+              <Text style={styles.quickText}>Explore upcoming winter retreats and yatras.</Text>
               <TouchableOpacity style={styles.exploreButton} onPress={() => navigation.getParent()?.navigate('Travel' as never)}>
                 <Text style={styles.exploreButtonText}>Explore</Text>
               </TouchableOpacity>

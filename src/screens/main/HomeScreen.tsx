@@ -10,13 +10,18 @@ import {
   Animated,
   PanResponder,
   Pressable,
-  LayoutAnimation,
-  Platform,
-  UIManager,
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import Reanimated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 
 const COLORS = {
   background: '#F8F6F2',
@@ -41,7 +46,7 @@ const services = [
   {
     title: 'Verify Collector',
     icon: 'verified-user',
-    route: 'Notifications' as const,
+    route: 'CollectorDashboard' as const,
   },
   {
     title: 'Announcements',
@@ -54,22 +59,18 @@ const infoSections = [
   {
     title: 'AARTIS AND DISCOURSES',
     items: [
-      'Kakda Aarti – 4:00 AM',
-      'Daily Morning Aarti – 6:00 AM',
+      'Kakda Aarti - 4:00 AM',
+      'Daily Morning Aarti - 6:00 AM',
       'Breakfast',
       'Lunch',
-      'Haripath – 6:00 PM',
+      'Haripath - 6:00 PM',
       'Dinner',
-      'Gita Path – 8:00 PM',
+      'Gita Path - 8:00 PM',
     ],
   },
   {
     title: 'Darshan Timings',
-    items: [
-      '04:30 am to 01:00 pm',
-      '04:30 pm to 09:00 pm',
-      'Temple timings may be changed on special occasions.',
-    ],
+    items: ['04:30 am to 01:00 pm', '04:30 pm to 09:00 pm', 'Temple timings may be changed on special occasions.'],
   },
   {
     title: 'Shri Gurudev Ashram',
@@ -129,45 +130,44 @@ function InfoAccordionCard({
   expanded: boolean
   onToggle: () => void
 }) {
-  const arrowAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current
+  const arrowProgress = useSharedValue(expanded ? 1 : 0)
 
   useEffect(() => {
-    Animated.timing(arrowAnim, {
-      toValue: expanded ? 1 : 0,
-      duration: 260,
-      useNativeDriver: true,
-    }).start()
-  }, [arrowAnim, expanded])
+    arrowProgress.value = withTiming(expanded ? 1 : 0, { duration: 260 })
+  }, [arrowProgress, expanded])
 
-  const rotation = arrowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  })
+  const arrowStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${arrowProgress.value * 180}deg` }],
+  }))
 
   const visibleItems = expanded ? section.items : section.items.slice(0, Math.min(2, section.items.length))
 
   return (
-    <View style={styles.infoCard}>
+    <Reanimated.View layout={LinearTransition.duration(300)} style={styles.infoCard}>
       <Text style={styles.infoTitle}>{section.title}</Text>
       <View style={styles.divider} />
 
-      {visibleItems.map((item, itemIndex) => (
-        <View key={`${section.title}-${itemIndex}`}>
-          <Text style={[styles.infoText, itemIndex === 0 && styles.infoTextFirst]}>{item}</Text>
-          {itemIndex < visibleItems.length - 1 && <View style={styles.subDivider} />}
-        </View>
-      ))}
+      <Reanimated.View layout={LinearTransition.duration(300)}>
+        {visibleItems.map((item, itemIndex) => (
+          <Reanimated.View
+            key={`${section.title}-${itemIndex}`}
+            entering={FadeIn.duration(180)}
+            exiting={FadeOut.duration(120)}
+          >
+            <Text style={[styles.infoText, itemIndex === 0 && styles.infoTextFirst]}>{item}</Text>
+            {itemIndex < visibleItems.length - 1 && <View style={styles.subDivider} />}
+          </Reanimated.View>
+        ))}
+      </Reanimated.View>
 
-      {section.items.length > visibleItems.length ? (
-        <Text style={styles.previewHint}>Tap the arrow to view more</Text>
-      ) : null}
+      {section.items.length > visibleItems.length ? <Text style={styles.previewHint}>Tap the arrow to view more</Text> : null}
 
       <TouchableOpacity onPress={onToggle} style={styles.expandButton} activeOpacity={0.8}>
-        <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+        <Reanimated.View style={arrowStyle}>
           <MaterialIcons name="keyboard-arrow-down" size={30} color={COLORS.primary} />
-        </Animated.View>
+        </Reanimated.View>
       </TouchableOpacity>
-    </View>
+    </Reanimated.View>
   )
 }
 
@@ -178,12 +178,6 @@ const HomeScreen: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
   const drawerAnim = useRef(new Animated.Value(0)).current
   const heroFade = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true)
-    }
-  }, [])
 
   useEffect(() => {
     Animated.parallel([
@@ -234,7 +228,6 @@ const HomeScreen: React.FC = () => {
   const closeDrawer = () => setDrawerOpen(false)
 
   const toggleSection = (title: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
     setExpandedSections((current) => ({
       ...current,
       [title]: !current[title],
@@ -246,7 +239,7 @@ const HomeScreen: React.FC = () => {
       <StatusBar backgroundColor={COLORS.background} barStyle="dark-content" />
 
       <View style={styles.screen}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 12) + 6 }] }>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
           <View style={styles.header}>
             <TouchableOpacity onPress={openDrawer} style={styles.menuButton}>
               <MaterialIcons name="menu" size={30} color={COLORS.primary} />
@@ -259,7 +252,7 @@ const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <Animated.View style={[styles.heroFadeWrap, { opacity: heroFade }] }>
+          <Animated.View style={[styles.heroFadeWrap, { opacity: heroFade }]}>
             <View style={styles.heroCard}>
               <View style={styles.heroTitleBlock}>
                 <Text style={styles.heroAppTitle}>ASHRAM APP</Text>
@@ -285,7 +278,18 @@ const HomeScreen: React.FC = () => {
 
           <View style={styles.grid}>
             {services.map((item, index) => (
-              <TouchableOpacity key={index} style={styles.card} onPress={() => navigation.navigate(item.route)}>
+              <TouchableOpacity
+                key={index}
+                style={styles.card}
+                onPress={() => {
+                  if (item.route === 'CollectorDashboard') {
+                    navigation.getParent()?.navigate('CollectorDashboard' as never)
+                    return
+                  }
+
+                  navigation.navigate(item.route)
+                }}
+              >
                 <MaterialIcons name={item.icon as any} size={42} color={COLORS.primary} />
 
                 <Text style={styles.cardText}>{item.title}</Text>
@@ -313,9 +317,7 @@ const HomeScreen: React.FC = () => {
           </View>
         </ScrollView>
 
-        {drawerOpen ? (
-          <Pressable style={styles.backdrop} onPress={closeDrawer} />
-        ) : null}
+        {drawerOpen ? <Pressable style={styles.backdrop} onPress={closeDrawer} /> : null}
 
         <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerTranslateX }] }]} {...drawerPanResponder.panHandlers}>
           <View style={styles.drawerHeader}>
@@ -332,7 +334,6 @@ const HomeScreen: React.FC = () => {
           ))}
         </Animated.View>
       </View>
-
     </SafeAreaView>
   )
 }
