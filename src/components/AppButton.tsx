@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
 import { theme } from '../constants/theme';
 
 type AppButtonProps = {
@@ -7,20 +7,31 @@ type AppButtonProps = {
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
   variant?: 'primary' | 'secondary';
+  disabled?: boolean;
+  loading?: boolean;
 };
 
-export default function AppButton({ title, onPress, style, variant = 'primary' }: AppButtonProps) {
+export default function AppButton({ title, onPress, style, variant = 'primary', disabled = false, loading = false }: AppButtonProps) {
+  const isDisabled = disabled || loading;
+
   return (
     <Pressable
+      accessibilityState={{ disabled: isDisabled }}
+      disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         variant === 'secondary' && styles.secondary,
-        pressed && styles.pressed,
+        pressed && !isDisabled && styles.pressed,
+        isDisabled && styles.disabled,
         style,
       ]}
     >
-      <Text style={[styles.text, variant === 'secondary' && styles.secondaryText]}>{title}</Text>
+      {loading ? (
+        <ActivityIndicator color={variant === 'secondary' ? theme.colors.primary : theme.colors.surface} />
+      ) : (
+        <Text style={[styles.text, variant === 'secondary' && styles.secondaryText]}>{title}</Text>
+      )}
     </Pressable>
   );
 }
@@ -39,6 +50,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.92,
+  },
+  disabled: {
+    opacity: 0.62,
   },
   text: {
     color: theme.colors.surface,

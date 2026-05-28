@@ -11,6 +11,19 @@ type PackageRow = {
   price?: string | number | null
 }
 
+function parsePriceAmount(price: string | number | null | undefined) {
+  if (typeof price === 'number') {
+    return price
+  }
+
+  if (typeof price === 'string') {
+    const parsed = Number(price.replace(/[^\d.]/g, ''))
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  return 0
+}
+
 function formatPrice(price: string | number | null | undefined) {
   if (typeof price === 'number') {
     return `INR ${price.toLocaleString('en-IN')}`
@@ -28,6 +41,7 @@ function mapPackageRow(row: PackageRow): TravelPackage {
     description: row.description ?? '',
     duration: row.duration ?? row.duration_label ?? 'Duration TBA',
     price: formatPrice(row.price),
+    priceAmount: parsePriceAmount(row.price),
   }
 }
 

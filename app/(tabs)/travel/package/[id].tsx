@@ -42,7 +42,7 @@ export default function PackageDetailsRoute() {
           title="Start Booking"
           onPress={() => {
             setSelectedPackage(packageItem);
-            router.push('/(tabs)/travel/booking-form' as never);
+            router.push('/(tabs)/travel/booking' as never);
           }}
         />
       </View>
