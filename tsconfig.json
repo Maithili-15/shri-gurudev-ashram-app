@@ -2,15 +2,19 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "lib": [
-      "ESNext",
-      "DOM"
-    ],
+    "lib": ["ESNext", "DOM"],
     "jsx": "react-jsx",
     "ignoreDeprecations": "6.0",
     "strict": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@react-navigation/native": ["src/shims/react-navigation/native/index.tsx"],
+      "@react-navigation/native-stack": ["src/shims/react-navigation/native-stack/index.tsx"],
+      "@react-navigation/bottom-tabs": ["src/shims/react-navigation/bottom-tabs/index.tsx"]
+    },
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
@@ -22,7 +26,10 @@
   ],
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
   ],
   "extends": "expo/tsconfig.base"
 }

@@ -23,7 +23,7 @@ export default function MainTabNavigator() {
         headerShown: false,
         tabBarShowLabel: false,
       }}
-      tabBar={(props) => <AppTabBar {...props} />}
+      tabBar={(props: React.ComponentProps<typeof AppTabBar>) => <AppTabBar {...props} />}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Travel" component={TravelStackNavigator} />

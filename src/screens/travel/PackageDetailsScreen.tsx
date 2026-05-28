@@ -53,7 +53,7 @@ export default function PackageDetailsScreen() {
           <Text style={styles.sectionTitle}>What is included</Text>
           <Text style={styles.bullet}>• Premium stay and temple transfers</Text>
           <Text style={styles.bullet}>• Guided darshan and support staff</Text>
-          <Text style={styles.bullet}>• Meals and pilgrimage essentials</Text>
+          <Text style={styles.bullet}>• Meals and yatra essentials</Text>
         </View>
 
         <TouchableOpacity
