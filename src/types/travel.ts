@@ -19,6 +19,15 @@ export type Booking = {
   totalAmount: number;
   status: BookingStatus;
   createdAt?: string;
+  // Traveler information (persisted on the booking row)
+  fullName?: string;
+  phoneNumber?: string;
+  whatsappNumber?: string;
+  dob?: string;
+  address?: string;
+  transportType?: string;
+  busType?: string;
+  roomType?: string;
 };
 
 export type CreateBookingInput = {

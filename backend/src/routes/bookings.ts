@@ -151,6 +151,14 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         traveler_count: travelerCount,
         special_notes: specialNotes?.trim() || null,
         booking_reference: bookingReference,
+        full_name: fullName.trim(),
+        phone_number: phoneNumber.trim(),
+        whatsapp_number: whatsappNumber.trim(),
+        dob: birthDate,
+        address: address.trim(),
+        transport_type: transportType,
+        bus_type: transportType === 'Train' ? busType : null,
+        room_type: roomType,
       })
       .select('*')
       .single()

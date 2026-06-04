@@ -52,6 +52,14 @@ export type Database = {
           traveler_count: number
           updated_at: string
           user_id: string
+          full_name: string | null
+          phone_number: string | null
+          whatsapp_number: string | null
+          dob: string | null
+          address: string | null
+          transport_type: string | null
+          bus_type: string | null
+          room_type: string | null
         }
         Insert: {
           admin_notes?: string | null
@@ -65,6 +73,14 @@ export type Database = {
           traveler_count?: number
           updated_at?: string
           user_id?: string
+          full_name?: string | null
+          phone_number?: string | null
+          whatsapp_number?: string | null
+          dob?: string | null
+          address?: string | null
+          transport_type?: string | null
+          bus_type?: string | null
+          room_type?: string | null
         }
         Update: {
           admin_notes?: string | null
@@ -78,6 +94,14 @@ export type Database = {
           traveler_count?: number
           updated_at?: string
           user_id?: string
+          full_name?: string | null
+          phone_number?: string | null
+          whatsapp_number?: string | null
+          dob?: string | null
+          address?: string | null
+          transport_type?: string | null
+          bus_type?: string | null
+          room_type?: string | null
         }
         Relationships: [
           {

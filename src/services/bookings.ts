@@ -11,6 +11,15 @@ type BookingApiRow = {
   total_amount: number
   status: string
   created_at?: string
+  // Traveler information persisted on the booking row
+  full_name?: string | null
+  phone_number?: string | null
+  whatsapp_number?: string | null
+  dob?: string | null
+  address?: string | null
+  transport_type?: string | null
+  bus_type?: string | null
+  room_type?: string | null
 }
 
 function mapBookingStatus(status: string): BookingStatus {
@@ -32,6 +41,14 @@ function mapBookingRow(row: BookingApiRow): Booking {
     totalAmount: row.total_amount,
     status: mapBookingStatus(row.status),
     createdAt: row.created_at,
+    fullName: row.full_name ?? undefined,
+    phoneNumber: row.phone_number ?? undefined,
+    whatsappNumber: row.whatsapp_number ?? undefined,
+    dob: row.dob ?? undefined,
+    address: row.address ?? undefined,
+    transportType: row.transport_type ?? undefined,
+    busType: row.bus_type ?? undefined,
+    roomType: row.room_type ?? undefined,
   }
 }
 
