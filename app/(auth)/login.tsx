@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../src/store/useAuthStore'
 import { signIn } from '../../src/services/auth'
+import { getFriendlyApiError } from '../../src/utils/apiErrors'
+import { isValidEmail } from '../../src/utils/validation'
 
 export default function LoginRoute() {
   const router = useRouter()
@@ -14,8 +16,28 @@ export default function LoginRoute() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
+
+  const validate = () => {
+    const nextErrors: typeof fieldErrors = {}
+
+    if (!isValidEmail(email)) {
+      nextErrors.email = 'Email is invalid.'
+    }
+
+    if (password.trim().length < 1) {
+      nextErrors.password = 'Password is required.'
+    }
+
+    setFieldErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
 
   const handleLogin = async () => {
+    if (!validate()) {
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage('')
 
@@ -24,7 +46,7 @@ export default function LoginRoute() {
       setUser(user)
       router.replace('/(tabs)/home' as never)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Could not sign in. Please try again.')
+      setErrorMessage(getFriendlyApiError(error, 'Login failed. Please check your email and password.', [{ match: /invalid/i, message: 'Login failed. Please check your email and password.' }]))
     } finally {
       setIsSubmitting(false)
     }
@@ -38,10 +60,10 @@ export default function LoginRoute() {
         </View>
         <Text style={styles.kicker}>Welcome back</Text>
         <Text style={styles.title}>Login to Ashram App</Text>
-        <Input label="Email" value={email} onChangeText={setEmail} placeholder="name@example.com" />
-        <Input label="Password" value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry />
+        <Input label="Email" value={email} onChangeText={setEmail} placeholder="name@example.com" errorMessage={fieldErrors.email} />
+        <Input label="Password" value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry errorMessage={fieldErrors.password} />
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        <Pressable onPress={() => void handleLogin()} disabled={isSubmitting} style={({ pressed }) => [pressed && !isSubmitting ? styles.buttonPressed : null]}>
+        <Pressable onPress={() => void handleLogin()} disabled={isSubmitting} style={({ pressed }) => [styles.button, pressed && !isSubmitting ? styles.buttonPressed : null, isSubmitting ? styles.buttonDisabled : null]}>
           <LinearGradient colors={['#7B4B00', '#B97512', '#E0A31F']} style={styles.primaryButton}>
             {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Login</Text>}
           </LinearGradient>
@@ -65,12 +87,14 @@ function Input({
   onChangeText,
   placeholder,
   secureTextEntry,
+  errorMessage,
 }: {
   label: string
   value: string
   onChangeText: (value: string) => void
   placeholder: string
   secureTextEntry?: boolean
+  errorMessage?: string
 }) {
   return (
     <View style={styles.inputBlock}>
@@ -82,8 +106,9 @@ function Input({
         placeholderTextColor="#9E9080"
         secureTextEntry={secureTextEntry}
         autoCapitalize="none"
-        style={styles.input}
+        style={[styles.input, errorMessage ? styles.inputError : null]}
       />
+      {errorMessage ? <Text style={styles.fieldError}>{errorMessage}</Text> : null}
     </View>
   )
 }
@@ -107,10 +132,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 54,
   },
+  inputError: { borderColor: '#D32F2F', backgroundColor: '#FFF8F8' },
   primaryButton: { minHeight: 58, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   buttonPressed: { opacity: 0.85 },
+  button: { borderRadius: 999 },
+  buttonDisabled: { opacity: 0.7 },
   errorText: { color: '#B00020', fontSize: 13, fontWeight: '700' },
+  fieldError: { color: '#B00020', fontSize: 12, fontWeight: '700' },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   linkText: { color: '#8B5A00', fontSize: 14, fontWeight: '900' },
 })

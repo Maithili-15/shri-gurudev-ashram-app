@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
@@ -7,18 +7,58 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { donationCategoriesMock, profileData, savedEventsMock, upcomingYatrasMock } from '../../src/services/profileMockData'
 import { signOut } from '../../src/services/auth'
+import { refreshCurrentUser } from '../../src/services/auth'
 import { useAuthStore } from '../../src/store/useAuthStore'
+import { useBookingDraftStore } from '../../src/store/useBookingDraftStore'
 
 export default function ProfileRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
+  const resetDraft = useBookingDraftStore((state) => state.resetDraft)
+  const clearAadhaar = useAuthStore((state) => state.setAadhaarNumber)
+  const clearTemporaryAadhaarUri = useAuthStore((state) => state.setTemporaryAadhaarUri)
+  const clearTemporarySelfieUri = useAuthStore((state) => state.setTemporarySelfieUri)
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
+  const [errorMessage, setErrorMessage] = React.useState('')
   const isCollector = user?.role === 'collector'
+  const verificationStatus = user?.verificationStatus ?? 'not_submitted'
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    setErrorMessage('')
+
+    try {
+      await refreshCurrentUser()
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not refresh profile right now.')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      logout()
+      resetDraft()
+      clearAadhaar('')
+      clearTemporaryAadhaarUri(null)
+      clearTemporarySelfieUri(null)
+      router.replace('/(auth)/splash' as never)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not log out right now.')
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void handleRefresh()} />}
+        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+      >
         <View style={styles.header}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarText}>{user?.fullName?.charAt(0) || 'D'}</Text>
@@ -55,6 +95,13 @@ export default function ProfileRoute() {
             </View>
           </View>
         </LinearGradient>
+
+        <VerificationCard
+          verificationStatus={verificationStatus}
+          onPress={() => router.push('/verify-identity' as never)}
+        />
+
+        {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
 
         <View style={styles.quickActionsRow}>
           <QuickActionCard icon="event-note" label="My Bookings" onPress={() => router.push('/(tabs)/travel/booking-history' as never)} />
@@ -136,19 +183,33 @@ export default function ProfileRoute() {
           <SettingsRow
             icon="log-out-outline"
             label="Logout"
-            onPress={async () => {
-              try {
-                await signOut()
-                logout()
-                router.replace('/(auth)/splash' as never)
-              } catch (error) {
-                console.log(JSON.stringify(error, null, 2))
-              }
-            }}
+            onPress={() => void handleLogout()}
           />
         </View>
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+function VerificationCard({ verificationStatus, onPress }: { verificationStatus: 'not_submitted' | 'submitted' | 'verified' | 'rejected'; onPress: () => void }) {
+  const tone =
+    verificationStatus === 'verified'
+      ? { icon: 'verified', background: '#F1F8E9', border: '#C5E1A5', color: '#2E7D32', title: 'Identity Verified', subtitle: 'Your identity has been verified.' }
+      : verificationStatus === 'submitted'
+        ? { icon: 'schedule', background: '#FFF8ED', border: '#FFE0B3', color: '#B97512', title: 'Verification Submitted', subtitle: 'Your documents are under review.' }
+        : verificationStatus === 'rejected'
+          ? { icon: 'cancel', background: '#FFF1F1', border: '#F3C4C4', color: '#C62828', title: 'Verification Rejected', subtitle: 'Please resubmit your documents.' }
+          : { icon: 'person-outline', background: '#FFF8ED', border: '#FFE0B3', color: '#E65C00', title: 'Verify Identity', subtitle: 'Upload Aadhaar and selfie to unlock bookings.' }
+
+  return (
+    <Pressable onPress={onPress} style={[styles.verifyCard, { backgroundColor: tone.background, borderColor: tone.border }]}>
+      <MaterialIcons name={tone.icon as any} size={24} color={tone.color} />
+      <View style={styles.verifyCopy}>
+        <Text style={[styles.verifyTitle, { color: tone.color }]}>{tone.title}</Text>
+        <Text style={styles.verifySubtitle}>{tone.subtitle}</Text>
+      </View>
+      <MaterialIcons name="chevron-right" size={24} color="#D7C7B8" />
+    </Pressable>
   )
 }
 
@@ -196,6 +257,18 @@ const styles = StyleSheet.create({
   heroStatValue: { color: '#2B231B', fontSize: 28, fontWeight: '900' },
   heroStatLabel: { color: '#7E7162', fontSize: 12, fontWeight: '700', marginTop: 4 },
   heroDivider: { width: 1, height: 44, backgroundColor: '#F0E7DD' },
+  verifyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1.5,
+  },
+  verifyCopy: { flex: 1 },
+  verifyTitle: { color: '#2B231B', fontSize: 16, fontWeight: '900' },
+  verifySubtitle: { color: '#7E7162', fontSize: 12, marginTop: 4, fontWeight: '700' },
+  inlineError: { color: '#B00020', fontSize: 13, fontWeight: '700' },
   quickActionsRow: { flexDirection: 'row', gap: 10 },
   quickActionCard: { flex: 1, backgroundColor: '#fff', borderRadius: 22, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0E7DD' },
   quickActionIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFF0D9', alignItems: 'center', justifyContent: 'center' },

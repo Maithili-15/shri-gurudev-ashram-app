@@ -5,36 +5,81 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../src/api/queryClient';
 import { getCurrentUser } from '../src/services/auth';
+import { getSupabaseClient } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 
 export default function RootLayout() {
   const setUser = useAuthStore((state) => state.setUser)
+  const clearUser = useAuthStore((state) => state.clearUser)
   const setHydrated = useAuthStore((state) => state.setHydrated)
 
   React.useEffect(() => {
+    const supabase = getSupabaseClient()
     let isMounted = true
 
-    void (async () => {
+    const syncSession = async () => {
       try {
         const currentUser = await getCurrentUser()
 
-        if (isMounted) {
-          if (currentUser) {
-            setUser(currentUser)
-          }
-          setHydrated(true)
+        if (!isMounted) {
+          return
+        }
+
+        if (currentUser) {
+          setUser(currentUser)
+        } else {
+          clearUser()
         }
       } catch {
+        if (!isMounted) {
+          return
+        }
+
+        clearUser()
+      } finally {
         if (isMounted) {
           setHydrated(true)
         }
       }
-    })()
+    }
+
+    void syncSession()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) {
+        return
+      }
+
+      if (!session?.user) {
+        clearUser()
+        setHydrated(true)
+        return
+      }
+
+      void getCurrentUser()
+        .then((currentUser) => {
+          if (!isMounted) {
+            return
+          }
+
+          if (currentUser) {
+            setUser(currentUser)
+          } else {
+            clearUser()
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setHydrated(true)
+          }
+        })
+    })
 
     return () => {
       isMounted = false
+      authListener.subscription.unsubscribe()
     }
-  }, [setHydrated, setUser])
+  }, [clearUser, setHydrated, setUser])
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

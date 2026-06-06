@@ -3,10 +3,21 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { isValidEmail } from '../../src/utils/validation'
 
 export default function ForgotPasswordRoute() {
   const router = useRouter()
   const [email, setEmail] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const handleBack = () => {
+    if (!isValidEmail(email)) {
+      setErrorMessage('Email is invalid.')
+      return
+    }
+
+    router.replace('/(auth)/login' as never)
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,8 +28,9 @@ export default function ForgotPasswordRoute() {
         <Text style={styles.kicker}>Account support</Text>
         <Text style={styles.title}>Reset your password</Text>
         <Text style={styles.subtitle}>Enter your email and the ashram app team can wire this into Supabase auth when backend auth is enabled.</Text>
-        <TextInput value={email} onChangeText={setEmail} placeholder="name@example.com" placeholderTextColor="#9E9080" autoCapitalize="none" style={styles.input} />
-        <Pressable style={styles.primaryButton} onPress={() => router.replace('/(auth)/login' as never)}>
+        <TextInput value={email} onChangeText={(value) => { setEmail(value); if (errorMessage) setErrorMessage('') }} placeholder="name@example.com" placeholderTextColor="#9E9080" autoCapitalize="none" keyboardType="email-address" style={[styles.input, errorMessage ? styles.inputError : null]} />
+        {errorMessage ? <Text style={styles.fieldError}>{errorMessage}</Text> : null}
+        <Pressable style={styles.primaryButton} onPress={handleBack}>
           <Text style={styles.primaryButtonText}>Back to Login</Text>
         </Pressable>
       </View>
@@ -44,6 +56,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 54,
   },
+  inputError: { borderColor: '#D32F2F', backgroundColor: '#FFF8F8' },
   primaryButton: { minHeight: 58, borderRadius: 999, backgroundColor: '#E65C00', alignItems: 'center', justifyContent: 'center' },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  fieldError: { color: '#B00020', fontSize: 12, fontWeight: '700' },
 })
