@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../src/store/useAuthStore'
 import { signUp } from '../../src/services/auth'
+import { getFriendlyApiError } from '../../src/utils/apiErrors'
+import { isNonEmptyString, isValidEmail, isValidPhoneNumber } from '../../src/utils/validation'
 
 export default function SignupRoute() {
   const router = useRouter()
@@ -15,8 +17,36 @@ export default function SignupRoute() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; email?: string; phone?: string; password?: string }>({})
+
+  const validate = () => {
+    const nextErrors: typeof fieldErrors = {}
+
+    if (!isNonEmptyString(fullName)) {
+      nextErrors.fullName = 'Name is required.'
+    }
+
+    if (!isValidEmail(email)) {
+      nextErrors.email = 'Email is invalid.'
+    }
+
+    if (!isValidPhoneNumber(phone)) {
+      nextErrors.phone = 'Phone number must be 10 digits.'
+    }
+
+    if (password.trim().length < 8) {
+      nextErrors.password = 'Password must be at least 8 characters.'
+    }
+
+    setFieldErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
 
   const handleSignup = async () => {
+    if (!validate()) {
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage('')
 
@@ -25,7 +55,11 @@ export default function SignupRoute() {
       setUser(user)
       router.replace('/(tabs)/home' as never)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Could not create your account. Please try again.')
+      setErrorMessage(
+        getFriendlyApiError(error, 'Could not create your account. Please try again.', [
+          { match: /already/i, message: 'An account with this email already exists.' },
+        ]),
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -36,12 +70,12 @@ export default function SignupRoute() {
       <View style={styles.content}>
         <Text style={styles.kicker}>Create seva profile</Text>
         <Text style={styles.title}>Begin your ashram journey</Text>
-        <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Enter your name" />
-        <Input label="Email" value={email} onChangeText={setEmail} placeholder="name@example.com" />
-        <Input label="Phone" value={phone} onChangeText={setPhone} placeholder="Enter your phone" />
-        <Input label="Password" value={password} onChangeText={setPassword} placeholder="Create a password" secureTextEntry />
+        <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Enter your name" errorMessage={fieldErrors.fullName} />
+        <Input label="Email" value={email} onChangeText={setEmail} placeholder="name@example.com" errorMessage={fieldErrors.email} />
+        <Input label="Phone" value={phone} onChangeText={setPhone} placeholder="Enter your phone" keyboardType="number-pad" errorMessage={fieldErrors.phone} />
+        <Input label="Password" value={password} onChangeText={setPassword} placeholder="Create a password" secureTextEntry errorMessage={fieldErrors.password} />
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        <Pressable onPress={() => void handleSignup()} disabled={isSubmitting} style={({ pressed }) => [pressed && !isSubmitting ? styles.buttonPressed : null]}>
+        <Pressable onPress={() => void handleSignup()} disabled={isSubmitting} style={({ pressed }) => [styles.button, pressed && !isSubmitting ? styles.buttonPressed : null, isSubmitting ? styles.buttonDisabled : null]}>
           <LinearGradient colors={['#7B4B00', '#B97512', '#E0A31F']} style={styles.primaryButton}>
             {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Create Account</Text>}
           </LinearGradient>
@@ -54,11 +88,12 @@ export default function SignupRoute() {
   )
 }
 
-function Input({ label, value, onChangeText, placeholder, secureTextEntry }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; secureTextEntry?: boolean }) {
+function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, errorMessage }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; secureTextEntry?: boolean; keyboardType?: 'default' | 'number-pad'; errorMessage?: string }) {
   return (
     <View style={styles.inputBlock}>
       <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#9E9080" autoCapitalize="none" secureTextEntry={secureTextEntry} style={styles.input} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#9E9080" autoCapitalize="none" secureTextEntry={secureTextEntry} keyboardType={keyboardType} style={[styles.input, errorMessage ? styles.inputError : null]} />
+      {errorMessage ? <Text style={styles.fieldError}>{errorMessage}</Text> : null}
     </View>
   )
 }
@@ -81,10 +116,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 54,
   },
+  inputError: { borderColor: '#D32F2F', backgroundColor: '#FFF8F8' },
   primaryButton: { minHeight: 58, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   buttonPressed: { opacity: 0.85 },
+  button: { borderRadius: 999 },
+  buttonDisabled: { opacity: 0.7 },
   errorText: { color: '#B00020', fontSize: 13, fontWeight: '700' },
+  fieldError: { color: '#B00020', fontSize: 12, fontWeight: '700' },
   secondaryButton: {
     minHeight: 56,
     borderRadius: 999,

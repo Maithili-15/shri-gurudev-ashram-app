@@ -1,5 +1,5 @@
 import React from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -15,37 +15,39 @@ export default function PaymentRoute() {
   const [booking, setBooking] = React.useState<Booking | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [isPaying, setIsPaying] = React.useState(false)
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState('')
 
-  React.useEffect(() => {
-    let isMounted = true
+  const loadBooking = React.useCallback(async (refresh = false) => {
+    if (refresh) {
+      setIsRefreshing(true)
+    } else {
+      setIsLoading(true)
+    }
 
-    void (async () => {
-      try {
-        if (!bookingId) {
-          throw new Error('Booking id is required to start payment.')
-        }
+    setErrorMessage('')
 
-        const bookingData = await getBookingById(bookingId)
-
-        if (isMounted) {
-          setBooking(bookingData)
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(error instanceof Error ? error.message : 'Could not load payment details.')
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+    try {
+      if (!bookingId) {
+        throw new Error('Booking id is required to start payment.')
       }
-    })()
 
-    return () => {
-      isMounted = false
+      const bookingData = await getBookingById(bookingId)
+      setBooking(bookingData)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not load payment details.')
+    } finally {
+      if (refresh) {
+        setIsRefreshing(false)
+      } else {
+        setIsLoading(false)
+      }
     }
   }, [bookingId])
+
+  React.useEffect(() => {
+    void loadBooking()
+  }, [loadBooking])
 
   const startPayment = async () => {
     if (!bookingId || !booking) {
@@ -118,7 +120,11 @@ export default function PaymentRoute() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadBooking(true)} />}
+        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Pressable style={styles.backButton} disabled={isPaying} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />

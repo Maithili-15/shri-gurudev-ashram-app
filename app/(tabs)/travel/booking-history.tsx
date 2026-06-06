@@ -34,7 +34,6 @@ export default function BookingHistoryRoute() {
       const bookingData = await getBookingsByUser()
       setBookings(bookingData)
     } catch (error) {
-      console.log('BOOKING HISTORY ERROR', JSON.stringify(error, null, 2))
       setErrorMessage('We could not load your bookings right now. Please try again.')
     } finally {
       if (isRefresh) {
@@ -63,7 +62,7 @@ export default function BookingHistoryRoute() {
             <Text style={styles.cardMeta}>{formatCreatedAt(item.createdAt)}</Text>
           </View>
           <View style={styles.statusPill}>
-            <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.statusText}>{formatStatus(item.status)}</Text>
           </View>
         </View>
         <View style={styles.divider} />
@@ -186,6 +185,10 @@ function formatCreatedAt(createdAt?: string) {
   }
 
   return `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`
+}
+
+function formatStatus(status: string) {
+  return status.replace(/_/g, ' ')
 }
 
 const styles = StyleSheet.create({

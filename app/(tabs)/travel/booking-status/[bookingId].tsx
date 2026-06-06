@@ -1,5 +1,5 @@
 import React from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -12,33 +12,35 @@ export default function BookingStatusRoute() {
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>()
   const [booking, setBooking] = React.useState<Booking | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState('')
 
-  React.useEffect(() => {
-    let isMounted = true
+  const loadBooking = React.useCallback(async (refresh = false) => {
+    if (refresh) {
+      setIsRefreshing(true)
+    } else {
+      setIsLoading(true)
+    }
 
-    void (async () => {
-      try {
-        const bookingData = await getBookingById(bookingId)
+    setErrorMessage('')
 
-        if (isMounted) {
-          setBooking(bookingData)
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(error instanceof Error ? error.message : 'Could not load booking status.')
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+    try {
+      const bookingData = await getBookingById(bookingId)
+      setBooking(bookingData)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not load booking status.')
+    } finally {
+      if (refresh) {
+        setIsRefreshing(false)
+      } else {
+        setIsLoading(false)
       }
-    })()
-
-    return () => {
-      isMounted = false
     }
   }, [bookingId])
+
+  React.useEffect(() => {
+    void loadBooking()
+  }, [loadBooking])
 
   const steps = buildSteps(booking?.status ?? 'payment_pending')
 
@@ -54,7 +56,11 @@ export default function BookingStatusRoute() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadBooking(true)} />}
+        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />

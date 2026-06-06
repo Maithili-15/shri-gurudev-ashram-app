@@ -17,9 +17,13 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import axios from 'axios'
 import { createBooking } from '../../services/bookings'
+import { refreshCurrentUser } from '../../services/auth'
 import { useBookingDraftStore } from '../../store/useBookingDraftStore'
 import { BusType, RoomType, TransportType, getYatraPrice } from '../../utils/yatraPricing'
+import { getFriendlyApiError } from '../../utils/apiErrors'
+import { isNonEmptyString, isValidPhoneNumber, normalizeDigits } from '../../utils/validation'
 
 const COLORS = {
   background: '#FAF6F0',
@@ -147,6 +151,7 @@ export default function BookingForm() {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'fullName' | 'phoneNumber' | 'whatsappNumber' | 'dob' | 'address' | 'numberOfTravelers', string>>>({})
 
   const transportType = draft.transportType || 'Flight'
   const busType = draft.busType || 'AC Train'
@@ -172,14 +177,58 @@ export default function BookingForm() {
     }
   }, [draft.dob, updateField])
 
+  const validateBooking = () => {
+    const nextErrors: typeof fieldErrors = {}
+
+    if (!isNonEmptyString(draft.fullName)) {
+      nextErrors.fullName = 'Name is required.'
+    }
+
+    if (!isValidPhoneNumber(draft.phoneNumber)) {
+      nextErrors.phoneNumber = 'Phone number must be 10 digits.'
+    }
+
+    if (!isValidPhoneNumber(draft.whatsappNumber)) {
+      nextErrors.whatsappNumber = 'WhatsApp number must be 10 digits.'
+    }
+
+    if (!draft.dob) {
+      nextErrors.dob = 'Date of birth is required.'
+    }
+
+    if (!isNonEmptyString(draft.address)) {
+      nextErrors.address = 'Address is required.'
+    }
+
+    if (travelerCount < 1) {
+      nextErrors.numberOfTravelers = 'At least one traveler is required.'
+    }
+
+    setFieldErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
+
   const submitBooking = async () => {
     if (!selectedPackage) {
       setErrorMessage('Please select a travel package before booking.')
       return
     }
 
-    if (travelerCount < 1) {
-      setErrorMessage('Enter at least one traveler.')
+    if (!validateBooking()) {
+      setErrorMessage('Please fix the highlighted fields before continuing.')
+      return
+    }
+
+    const currentUser = await refreshCurrentUser()
+
+    if (!currentUser) {
+      setErrorMessage('Please sign in again to continue.')
+      return
+    }
+
+    if (currentUser.verificationStatus === 'not_submitted') {
+      setErrorMessage('Please verify your identity before booking.')
+      router.replace({ pathname: '/verify-identity', params: { returnTo: '/(tabs)/travel/booking' } } as never)
       return
     }
 
@@ -206,14 +255,25 @@ export default function BookingForm() {
         roomType,
       })
 
-      updateField('bookingReference', booking.bookingReference)
-      router.replace({
-        pathname: `/(tabs)/travel/upload-documents/${booking.id}`,
-        params: {
-          bookingReference: booking.bookingReference,
-        },
-      } as never)
+      router.push(
+        {
+          pathname: '/(tabs)/travel/payment',
+          params: {
+            bookingId: booking.id,
+            bookingReference: booking.bookingReference,
+          },
+        } as never,
+      )
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 403) {
+        const refreshedUser = await refreshCurrentUser()
+        if (refreshedUser?.verificationStatus === 'not_submitted') {
+          setErrorMessage('Please verify your identity before booking.')
+          router.replace('/verify-identity' as never)
+          return
+        }
+      }
+
       setErrorMessage(error instanceof Error ? error.message : 'Could not create booking. Please try again.')
     } finally {
       setIsSubmitting(false)
@@ -386,24 +446,26 @@ export default function BookingForm() {
                 <Text style={styles.sectionSubtitle}>These details remain in the draft while the booking request is submitted.</Text>
               </View>
 
-              <InputField label="Full Name" value={draft.fullName} onChangeText={(value) => updateField('fullName', value)} placeholder="Enter complete legal name" />
+              <InputField label="Full Name" value={draft.fullName} onChangeText={(value) => updateField('fullName', value)} placeholder="Enter complete legal name" errorMessage={fieldErrors.fullName} />
               <View style={styles.row}>
                 <View style={styles.flexItem}>
                   <InputField
                     label="Phone Number"
                     value={draft.phoneNumber}
-                    onChangeText={(value) => updateField('phoneNumber', value.replace(/[^\d]/g, '').slice(0, 10))}
+                    onChangeText={(value) => updateField('phoneNumber', normalizeDigits(value, 10))}
                     placeholder="10-digit mobile"
                     keyboardType="number-pad"
+                    errorMessage={fieldErrors.phoneNumber}
                   />
                 </View>
                 <View style={styles.flexItem}>
                   <InputField
                     label="WhatsApp Number"
                     value={draft.whatsappNumber}
-                    onChangeText={(value) => updateField('whatsappNumber', value.replace(/[^\d]/g, '').slice(0, 10))}
+                    onChangeText={(value) => updateField('whatsappNumber', normalizeDigits(value, 10))}
                     placeholder="10-digit WhatsApp"
                     keyboardType="number-pad"
+                    errorMessage={fieldErrors.whatsappNumber}
                   />
                 </View>
               </View>
@@ -429,13 +491,15 @@ export default function BookingForm() {
                 onChangeText={(value) => updateField('address', value)}
                 placeholder="Complete address"
                 multiline
+                errorMessage={fieldErrors.address}
               />
               <InputField
                 label="Traveler Count"
                 value={draft.numberOfTravelers}
-                onChangeText={(value) => updateField('numberOfTravelers', value.replace(/[^\d]/g, ''))}
+                onChangeText={(value) => updateField('numberOfTravelers', normalizeDigits(value, 2))}
                 placeholder="1"
                 keyboardType="number-pad"
+                errorMessage={fieldErrors.numberOfTravelers}
               />
               <InputField
                 label="Special Notes"
@@ -533,6 +597,7 @@ function InputField({
   placeholder,
   keyboardType,
   multiline,
+  errorMessage,
 }: {
   label: string
   value: string
@@ -540,6 +605,7 @@ function InputField({
   placeholder: string
   keyboardType?: KeyboardTypeOptions
   multiline?: boolean
+  errorMessage?: string
 }) {
   return (
     <View style={styles.inputBlock}>
@@ -551,9 +617,10 @@ function InputField({
         placeholderTextColor={COLORS.softText}
         keyboardType={keyboardType}
         multiline={multiline}
-        style={[styles.input, multiline && styles.textArea]}
+        style={[styles.input, multiline && styles.textArea, errorMessage ? styles.inputError : null]}
         textAlignVertical={multiline ? 'top' : 'center'}
       />
+      {errorMessage ? <Text style={styles.fieldError}>{errorMessage}</Text> : null}
     </View>
   )
 }
@@ -955,6 +1022,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 54,
   },
+  inputError: { borderColor: '#D32F2F', backgroundColor: '#FFF8F8' },
   textArea: {
     minHeight: 96,
   },
@@ -977,6 +1045,7 @@ const styles = StyleSheet.create({
     color: COLORS.softText,
     fontWeight: '600',
   },
+  fieldError: { color: '#B00020', fontSize: 12, fontWeight: '700', marginTop: 4 },
   agePill: {
     width: 90,
     borderRadius: 18,

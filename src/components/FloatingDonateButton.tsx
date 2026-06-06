@@ -9,7 +9,6 @@ const RING_WIDTH = 4
 const OUTER_SIZE = CIRCLE_SIZE + RING_WIDTH * 2 // 76
 
 export default function FloatingDonateButton() {
-  console.log('=== FLOATING DONATE BUTTON MOUNTED ===');
   const router = useRouter()
 
   return (

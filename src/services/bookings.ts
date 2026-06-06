@@ -1,33 +1,39 @@
-import api from '../api/axiosClient'
-import { Booking, BookingStatus, CreateBookingInput } from '../types/travel'
+import api from "../api/axiosClient";
+import { Booking, BookingStatus, CreateBookingInput } from "../types/travel";
+import { getFriendlyApiError } from "../utils/apiErrors";
 
 type BookingApiRow = {
-  id: string
-  booking_reference: string
-  package_id: string
-  user_id: string
-  traveler_count: number
-  special_notes: string | null
-  total_amount: number
-  status: string
-  created_at?: string
+  id: string;
+  booking_reference: string;
+  package_id: string;
+  user_id: string;
+  traveler_count: number;
+  special_notes: string | null;
+  total_amount: number;
+  status: string;
+  created_at?: string;
   // Traveler information persisted on the booking row
-  full_name?: string | null
-  phone_number?: string | null
-  whatsapp_number?: string | null
-  dob?: string | null
-  address?: string | null
-  transport_type?: string | null
-  bus_type?: string | null
-  room_type?: string | null
-}
+  full_name?: string | null;
+  phone_number?: string | null;
+  whatsapp_number?: string | null;
+  dob?: string | null;
+  address?: string | null;
+  transport_type?: string | null;
+  bus_type?: string | null;
+  room_type?: string | null;
+};
 
 function mapBookingStatus(status: string): BookingStatus {
-  if (status === 'payment_pending' || status === 'paid' || status === 'cancelled' || status === 'completed') {
-    return status
+  if (
+    status === "payment_pending" ||
+    status === "paid" ||
+    status === "cancelled" ||
+    status === "completed"
+  ) {
+    return status;
   }
 
-  return 'payment_pending'
+  return "payment_pending";
 }
 
 function mapBookingRow(row: BookingApiRow): Booking {
@@ -49,20 +55,70 @@ function mapBookingRow(row: BookingApiRow): Booking {
     transportType: row.transport_type ?? undefined,
     busType: row.bus_type ?? undefined,
     roomType: row.room_type ?? undefined,
+  };
+}
+
+export async function createBooking(
+  input: CreateBookingInput,
+): Promise<Booking> {
+  try {
+    const { data } = await api.post<{ booking: BookingApiRow }>(
+      "/api/bookings",
+      input,
+    );
+    return mapBookingRow(data.booking);
+  } catch (error) {
+    throw new Error(
+      getFriendlyApiError(
+        error,
+        "Could not create booking. Please try again.",
+        [
+          {
+            match: /Identity verification must be completed before booking/i,
+            message: "Please verify your identity before booking.",
+          },
+          {
+            match: /Not enough seats available/i,
+            message: "Not enough seats are available for this package.",
+          },
+          {
+            match: /Travel package is not active/i,
+            message: "This travel package is no longer active.",
+          },
+        ],
+      ),
+    );
   }
 }
 
-export async function createBooking(input: CreateBookingInput): Promise<Booking> {
-  const { data } = await api.post<{ booking: BookingApiRow }>('/api/bookings', input)
-  return mapBookingRow(data.booking)
-}
-
 export async function getBookingsByUser(_userId?: string): Promise<Booking[]> {
-  const { data } = await api.get<{ bookings: BookingApiRow[] }>('/api/bookings')
-  return data.bookings.map(mapBookingRow)
+  try {
+    const { data } = await api.get<{ bookings: BookingApiRow[] }>(
+      "/api/bookings",
+    );
+    return data.bookings.map(mapBookingRow);
+  } catch (error) {
+    throw new Error(
+      getFriendlyApiError(
+        error,
+        "We could not load your bookings right now. Please try again.",
+      ),
+    );
+  }
 }
 
 export async function getBookingById(bookingId: string): Promise<Booking> {
-  const { data } = await api.get<{ booking: BookingApiRow }>(`/api/bookings/${bookingId}`)
-  return mapBookingRow(data.booking)
+  try {
+    const { data } = await api.get<{ booking: BookingApiRow }>(
+      `/api/bookings/${bookingId}`,
+    );
+    return mapBookingRow(data.booking);
+  } catch (error) {
+    throw new Error(
+      getFriendlyApiError(
+        error,
+        "Could not load booking details. Please try again.",
+      ),
+    );
+  }
 }

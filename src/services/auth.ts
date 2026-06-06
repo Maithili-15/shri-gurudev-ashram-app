@@ -1,35 +1,61 @@
-import { getSupabaseClient } from '../lib/supabase'
-import type { Database } from '../types/database.types'
+import { getSupabaseClient } from "../lib/supabase";
+import type { Database } from "../types/database.types";
+import { useAuthStore } from "../store/useAuthStore";
 
-type UserRow = Database['public']['Tables']['users']['Row']
+type UserRow = Database["public"]["Tables"]["users"]["Row"];
+
+export type VerificationStatus =
+  | "not_submitted"
+  | "submitted"
+  | "verified"
+  | "rejected";
 
 export type AuthUser = {
-  id: string
-  fullName: string
-  email: string | null
-  phone: string
-  role: string
-  verificationStatus: 'not_submitted' | 'submitted' | 'verified' | 'rejected'
-  aadhaarNumber: string | null
-  aadhaarImagePath: string | null
-  selfieImagePath: string | null
-}
+  id: string;
+  fullName: string;
+  email: string | null;
+  phone: string;
+  role: string;
+  verificationStatus: VerificationStatus;
+  aadhaarNumber: string | null;
+  aadhaarImagePath: string | null;
+  selfieImagePath: string | null;
+};
 
 type AuthMetadata = {
-  full_name?: string
-  phone?: string
-}
+  full_name?: string;
+  phone?: string;
+};
 
 function logAuthError(error: unknown) {
-  console.log(JSON.stringify(error, null, 2))
+  console.warn(JSON.stringify(error, null, 2));
 }
 
 function toReadableAuthError(error: unknown, fallbackMessage: string) {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return new Error(String((error as { message?: unknown }).message ?? fallbackMessage))
+  if (error && typeof error === "object" && "message" in error) {
+    const message = String(
+      (error as { message?: unknown }).message ?? fallbackMessage,
+    );
+
+    if (/invalid login credentials/i.test(message)) {
+      return new Error("Login failed. Please check your email and password.");
+    }
+
+    if (
+      /user already registered/i.test(message) ||
+      /already been registered/i.test(message)
+    ) {
+      return new Error("An account with this email already exists.");
+    }
+
+    if (/password.*at least/i.test(message)) {
+      return new Error("Password is too short.");
+    }
+
+    return new Error(message);
   }
 
-  return new Error(fallbackMessage)
+  return new Error(fallbackMessage);
 }
 
 function mapUserRow(row: UserRow): AuthUser {
@@ -39,48 +65,62 @@ function mapUserRow(row: UserRow): AuthUser {
     email: row.email,
     phone: row.phone,
     role: row.role,
-    verificationStatus: (row.verification_status as any) || 'not_submitted',
+    verificationStatus:
+      (row.verification_status as VerificationStatus) || "not_submitted",
     aadhaarNumber: row.aadhaar_number || null,
     aadhaarImagePath: row.aadhaar_image_path || null,
     selfieImagePath: row.selfie_image_path || null,
-  }
+  };
 }
 
-function mapFallbackAuthUser(user: { id: string; email?: string | null; user_metadata?: AuthMetadata | null }): AuthUser {
+function mapFallbackAuthUser(user: {
+  id: string;
+  email?: string | null;
+  user_metadata?: AuthMetadata | null;
+}): AuthUser {
   return {
     id: user.id,
-    fullName: user.user_metadata?.full_name?.trim() || user.email || 'User',
+    fullName: user.user_metadata?.full_name?.trim() || user.email || "User",
     email: user.email ?? null,
-    phone: user.user_metadata?.phone?.trim() || '',
-    role: 'user',
-    verificationStatus: 'not_submitted',
+    phone: user.user_metadata?.phone?.trim() || "",
+    role: "user",
+    verificationStatus: "not_submitted",
     aadhaarNumber: null,
     aadhaarImagePath: null,
     selfieImagePath: null,
-  }
+  };
 }
 
-async function getProfileForAuthUser(authUser: { id: string; email?: string | null; user_metadata?: AuthMetadata | null }) {
-  const supabase = getSupabaseClient()
+async function getProfileForAuthUser(authUser: {
+  id: string;
+  email?: string | null;
+  user_metadata?: AuthMetadata | null;
+}) {
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser.id)
-    .maybeSingle()
+    .from("users")
+    .select("*")
+    .eq("id", authUser.id)
+    .maybeSingle();
 
   if (error) {
-    throw error
+    throw error;
   }
 
   if (data) {
-    return mapUserRow(data)
+    return mapUserRow(data);
   }
 
-  return mapFallbackAuthUser(authUser)
+  return mapFallbackAuthUser(authUser);
 }
 
-export async function signUp(email: string, password: string, fullName: string, phone: string): Promise<AuthUser> {
-  const supabase = getSupabaseClient()
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string,
+  phone: string,
+): Promise<AuthUser> {
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -91,85 +131,116 @@ export async function signUp(email: string, password: string, fullName: string, 
         phone,
       },
     },
-  })
+  });
 
   if (error) {
-    logAuthError(error)
-    throw toReadableAuthError(error, 'Could not create your account. Please try again.')
+    logAuthError(error);
+    throw toReadableAuthError(
+      error,
+      "Could not create your account. Please try again.",
+    );
   }
 
   if (!data.user) {
-    throw new Error('Signup succeeded but Supabase did not return a user.')
+    throw new Error("Signup succeeded but Supabase did not return a user.");
   }
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.getSession();
 
   if (sessionError) {
-    logAuthError(sessionError)
-    throw toReadableAuthError(sessionError, 'Your account was created, but the session could not be loaded.')
+    logAuthError(sessionError);
+    throw toReadableAuthError(
+      sessionError,
+      "Your account was created, but the session could not be loaded.",
+    );
   }
 
   if (sessionData.session?.user) {
-    return getProfileForAuthUser(sessionData.session.user)
+    return getProfileForAuthUser(sessionData.session.user);
   }
 
   return {
     id: data.user.id,
-    fullName: fullName.trim() || data.user.email || 'User',
+    fullName: fullName.trim() || data.user.email || "User",
     email: data.user.email ?? email.trim() ?? null,
     phone: phone.trim(),
-    role: 'user',
-    isVerified: false,
-  }
+    role: "user",
+    verificationStatus: "not_submitted",
+    aadhaarNumber: null,
+    aadhaarImagePath: null,
+    selfieImagePath: null,
+  };
 }
 
-export async function signIn(email: string, password: string): Promise<AuthUser> {
-  const supabase = getSupabaseClient()
+export async function signIn(
+  email: string,
+  password: string,
+): Promise<AuthUser> {
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
-  })
+  });
 
   if (error) {
-    logAuthError(error)
-    throw toReadableAuthError(error, 'Could not sign you in. Please check your credentials.')
+    logAuthError(error);
+    throw toReadableAuthError(
+      error,
+      "Could not sign you in. Please check your credentials.",
+    );
   }
 
   if (!data.user) {
-    throw new Error('Signin succeeded but Supabase did not return a user.')
+    throw new Error("Signin succeeded but Supabase did not return a user.");
   }
 
-  return getProfileForAuthUser(data.user)
+  return getProfileForAuthUser(data.user);
 }
 
 export async function signOut(): Promise<void> {
-  const supabase = getSupabaseClient()
-  const { error } = await supabase.auth.signOut()
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.signOut();
 
   if (error) {
-    logAuthError(error)
-    throw toReadableAuthError(error, 'Could not sign you out. Please try again.')
+    logAuthError(error);
+    throw toReadableAuthError(
+      error,
+      "Could not sign you out. Please try again.",
+    );
   }
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase.auth.getSession()
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    return null
+    return null;
   }
 
-  const authUser = data.session?.user
+  const authUser = data.session?.user;
 
   if (!authUser) {
-    return null
+    return null;
   }
 
   try {
-    return await getProfileForAuthUser(authUser)
+    return await getProfileForAuthUser(authUser);
   } catch {
-    return mapFallbackAuthUser(authUser)
+    return mapFallbackAuthUser(authUser);
   }
+}
+
+export async function refreshCurrentUser(): Promise<AuthUser | null> {
+  const currentUser = await getCurrentUser();
+
+  if (currentUser) {
+    useAuthStore.getState().setUser(currentUser);
+    return currentUser;
+  }
+
+  useAuthStore.getState().clearUser();
+  return null;
 }
