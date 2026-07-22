@@ -2,8 +2,6 @@
 /backend/private_storage/
 /backend/uploads
 /backend
-.env
-.env.*
 .temp
 firebase-service-account.json
 # dependencies
