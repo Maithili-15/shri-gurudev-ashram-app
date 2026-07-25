@@ -19,6 +19,14 @@ function isValidPhone(p: string): boolean {
   return /^\d{10}$/.test(p.trim())
 }
 
+function formatDateString(isoStr?: string): string {
+  if (!isoStr) return '—'
+  const parts = isoStr.split('T')[0].split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+  return localDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 export default function YajmanDetailsRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -36,11 +44,7 @@ export default function YajmanDetailsRoute() {
     ? 'Please enter a valid 10-digit mobile number.' : ''
   const isValid = fullName.trim().length >= 2 && isValidPhone(phoneNumber)
 
-  const displayDate = selectedDate
-    ? new Date(selectedDate).toLocaleDateString('en-IN', {
-        day: '2-digit', month: 'long', year: 'numeric',
-      })
-    : '—'
+  const displayDate = formatDateString(selectedDate)
 
   const onContinue = () => {
     setTouched({ fullName: true, phoneNumber: true })

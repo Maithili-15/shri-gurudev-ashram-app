@@ -15,6 +15,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
 import { createSevaBooking, fetchSevaPricing } from '../../../../src/services/seva'
 
+function formatDateString(isoStr?: string): string {
+  if (!isoStr) return '—'
+  const parts = isoStr.split('T')[0].split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+  return localDate.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 export default function YajmanReviewRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -32,11 +40,7 @@ export default function YajmanReviewRoute() {
     fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(p.yajman) }).catch(() => {})
   }, [])
 
-  const displayDate = selectedDate
-    ? new Date(selectedDate).toLocaleDateString('en-IN', {
-        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
-      })
-    : '—'
+  const displayDate = formatDateString(selectedDate)
 
   const onConfirmAndPay = async () => {
     setIsCreating(true)

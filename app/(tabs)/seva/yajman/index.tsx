@@ -21,7 +21,19 @@ const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ]
-function toIso(d: Date): string { return d.toISOString().split('T')[0] }
+function toIso(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+function formatDateString(isoStr: string, options?: Intl.DateTimeFormatOptions): string {
+  if (!isoStr) return ''
+  const parts = isoStr.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+  return localDate.toLocaleDateString('en-IN', options ?? { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+}
 function buildCalendar(year: number, month: number): (Date | null)[] {
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -130,9 +142,7 @@ export default function YajmanCalendarRoute() {
     router.push('/(tabs)/seva/yajman/details' as never)
   }
 
-  const formattedSelected = selectedIso
-    ? new Date(selectedIso).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-    : ''
+  const formattedSelected = formatDateString(selectedIso, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 
   return (
     <SafeAreaView style={styles.container}>

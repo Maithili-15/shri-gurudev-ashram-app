@@ -141,9 +141,15 @@ Last updated: July 2026.
   - `useProtectedRoute` uses `router.replace({ pathname: '/(auth)/login', params: { returnTo: pathname } })` so unauthenticated protected routes are never left in the history stack underneath Login.
   - Login back button (`handleBack`) returns directly to `/(tabs)/home` in a single back action when exiting an unauthenticated redirect.
   - Signing out from the Profile screen explicitly navigates to `/(tabs)/home` as a guest before clearing session state, preventing unwanted redirection to the Login page.
+  - `useLocalSearchParams` route parameters (e.g. `returnTo` in `/edit-profile`, `bookingId` in travel screens, `id` in package detail screens) are safely destructured, type-normalized from potential array values, and guarded against missing values during initial render.
 
 ### User Profile & Identity Verification
-- Profile management (name, email, profile image upload to Supabase Storage `profile-images` bucket).
+- Profile management (full name, email, profile image upload to Supabase Storage `profile-images` bucket).
+- **Multipart Upload & Image Management**:
+  - Profile image uploads (`uploadProfileImage`) pass `FormData` without explicit `Content-Type: multipart/form-data` header overrides, preserving the browser/native `boundary` token required by Express `multer`.
+  - Dynamic MIME type and file extension detection (`getMimeTypeFromUri`) extracts image format (`jpg`, `png`, `webp`, `heic`).
+  - Supports updating, replacing, or clearing (`null`) user profile images via `PUT /api/users/me`.
+  - If the target Supabase storage bucket (`profile-images`) is unconfigured in deployment, the backend returns clear diagnostic error feedback (`Storage bucket 'profile-images' is missing or unconfigured.`) without silent crashes.
 - Identity verification (Aadhaar number + Aadhaar document photo + selfie photo upload to `passenger-documents` bucket).
 - Account soft deletion (`DELETE /api/users/me` sets `deleted_at = NOW()`).
 
@@ -167,6 +173,9 @@ Last updated: July 2026.
 
 ### Seva Booking & Dynamic Calendar Availability
 - Devotees sponsor full-day Mahaprasad (Nitya Annadan - ₹2,100, stored in MongoDB `NityaAnnadanBooking`) or Katha Sponsorship (Yajman - ₹5,100, stored in Supabase `seva_bookings`).
+- **Timezone-Safe Date Serialization**:
+  - Interactive calendars serialize selected dates using local date component getters (`d.getFullYear()`, `d.getMonth() + 1`, `d.getDate()`) instead of `.toISOString()`. This prevents local midnight Date objects (e.g. `July 25 00:00:00 local IST`) from being converted to UTC previous-day strings (`2026-07-24`).
+  - Date strings (`YYYY-MM-DD`) are formatted for UI display via `formatDateString()`, parsing year/month/day as local dates to guarantee zero off-by-one day shifts between calendar pickers, Zustand state, API payloads, MongoDB/Supabase database storage, and receipts across all client timezones.
 - **Real-Time Calendar Availability**: Availability for Nitya Annadan is fetched from MongoDB using `GET /api/annadan/availability?month=2026-07` or `GET /api/annadan/availability?date=2026-07-20`, while Yajman availability is fetched from Supabase using `GET /api/seva/availability?type=yajman&month=2026-07`.
 - Backend counts confirmed/pending bookings (`paid`, `payment_pending`) for each date, compares against daily configured capacity (`SEVA_CAPACITY_ANNADAN`, `SEVA_CAPACITY_YAJMAN`), and returns date-keyed availability:
   ```json

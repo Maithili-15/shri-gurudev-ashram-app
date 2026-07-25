@@ -26,7 +26,7 @@ usersRouter.put("/me", requireAuth, async (request, response, next) => {
     const updates: Record<string, unknown> = {};
     if (typeof body.fullName === "string")
       updates.full_name = body.fullName.trim();
-    if (typeof body.profileImageUrl === "string")
+    if ("profileImageUrl" in body && (body.profileImageUrl === null || typeof body.profileImageUrl === "string"))
       updates.profile_image_url = body.profileImageUrl;
     if (typeof body.pushToken === "string")
       updates.push_token = body.pushToken;
@@ -119,17 +119,20 @@ usersRouter.post(
   requireAuth,
   upload.single("profileImage"),
   async (request, response, next) => {
+    const fs = require('fs');
+    const authRequest = request as AuthenticatedRequest & {
+      file?: Express.Multer.File;
+    };
+
+    if (!authRequest.file) {
+      next(new HttpError(400, "No image file provided"));
+      return;
+    }
+
+    const filePath = authRequest.file.path;
+
     try {
-      const authRequest = request as AuthenticatedRequest & {
-        file?: Express.Multer.File;
-      };
-
-      if (!authRequest.file) {
-        throw new HttpError(400, "No image file provided");
-      }
-
-      const fs = require('fs');
-      const fileBuffer = fs.readFileSync(authRequest.file.path);
+      const fileBuffer = fs.readFileSync(filePath);
       const ext = authRequest.file.originalname.split('.').pop() || 'jpg';
       const path = `${authRequest.userId}/${Date.now()}.${ext}`;
 
@@ -141,10 +144,14 @@ usersRouter.post(
         });
 
       if (error) {
-        throw new HttpError(500, error.message);
+        const isBucketMissing = error.message?.toLowerCase().includes('not found') || (error as any).status === 404;
+        throw new HttpError(
+          500,
+          isBucketMissing
+            ? "Storage bucket 'profile-images' is missing or unconfigured."
+            : error.message
+        );
       }
-
-      fs.unlinkSync(authRequest.file.path);
 
       const { data } = supabaseAdmin.storage
         .from('profile-images')
@@ -153,6 +160,12 @@ usersRouter.post(
       response.status(200).json({ publicUrl: data.publicUrl });
     } catch (error) {
       next(error);
+    } finally {
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (_) {}
+      }
     }
   }
 );

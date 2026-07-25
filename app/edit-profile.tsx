@@ -22,7 +22,9 @@ type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name']
 
 export default function EditProfileRoute() {
   const router = useRouter()
-  const { onboarding } = useLocalSearchParams<{ onboarding?: string }>()
+  const params = useLocalSearchParams<{ onboarding?: string; returnTo?: string }>()
+  const onboarding = params.onboarding
+  const returnTo = params.returnTo
   const insets = useSafeAreaInsets()
   const setUser = useAuthStore((state) => state.setUser)
   
@@ -30,6 +32,7 @@ export default function EditProfileRoute() {
   const [fullName, setFullName] = React.useState('')
   const [profileImageUrl, setProfileImageUrl] = React.useState('')
   const [selectedImageUri, setSelectedImageUri] = React.useState<string | null>(null)
+  const [isImageCleared, setIsImageCleared] = React.useState(false)
   
   const [isLoading, setIsLoading] = React.useState(true)
   const [isSaving, setIsSaving] = React.useState(false)
@@ -46,6 +49,7 @@ export default function EditProfileRoute() {
       setFullName(profileInfo.fullName || '')
       setProfileImageUrl(profileInfo.profileImageUrl ?? '')
       setSelectedImageUri(null)
+      setIsImageCleared(false)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not load your profile.')
     } finally {
@@ -56,8 +60,6 @@ export default function EditProfileRoute() {
   React.useEffect(() => {
     void loadProfile()
   }, [loadProfile])
-
-
 
   const validate = () => {
     const trimmedName = fullName.trim()
@@ -82,7 +84,12 @@ export default function EditProfileRoute() {
 
     try {
       const trimmedName = fullName.trim()
-      const nextImageUrl = selectedImageUri ? await uploadProfileImage(selectedImageUri) : profileImageUrl.trim() || null
+      let nextImageUrl: string | null = null
+      if (selectedImageUri) {
+        nextImageUrl = await uploadProfileImage(selectedImageUri)
+      } else if (!isImageCleared && profileImageUrl.trim()) {
+        nextImageUrl = profileImageUrl.trim()
+      }
       
       await updateCurrentProfile({
         fullName: trimmedName,
@@ -95,7 +102,6 @@ export default function EditProfileRoute() {
       }
 
       if (onboarding) {
-        const returnTo = params.returnTo as string | undefined
         if (returnTo) {
           router.replace(returnTo as never)
         } else {
@@ -121,7 +127,7 @@ export default function EditProfileRoute() {
 
   const displayImageSource = selectedImageUri
     ? { uri: selectedImageUri }
-    : profileImageUrl
+    : !isImageCleared && profileImageUrl
     ? { uri: profileImageUrl }
     : null
 
@@ -158,7 +164,14 @@ export default function EditProfileRoute() {
               title="Profile picture"
               label={displayImageSource ? 'Image selected' : 'No file selected'}
               uri={displayImageSource ? displayImageSource.uri : null}
-              onSelect={setSelectedImageUri}
+              onSelect={(uri) => {
+                setSelectedImageUri(uri)
+                if (!uri) {
+                  setIsImageCleared(true)
+                } else {
+                  setIsImageCleared(false)
+                }
+              }}
               aspectRatio={[1, 1]}
               disabled={isSaving}
             />
