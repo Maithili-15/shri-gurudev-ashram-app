@@ -14,6 +14,14 @@ import { useSevaStore } from '../../src/store/useSevaStore'
 // UNIVERSAL SEVA SUCCESS SCREEN
 // Params: sevaType, reference, transactionId, devotee, phone, sevaDate, amount
 // ─────────────────────────────────────────────────────────────────────────────
+function formatDateString(isoStr?: string): string {
+  if (!isoStr) return '—'
+  const parts = isoStr.split('T')[0].split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+  return localDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 export default function SevaSuccessRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -72,7 +80,7 @@ export default function SevaSuccessRoute() {
         message:
           `🙏 ${label.title} Receipt\n\n` +
           `Devotee: ${devotee}\n` +
-          `Seva Date: ${sevaDate ? new Date(sevaDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}\n` +
+          `Seva Date: ${formatDateString(sevaDate)}\n` +
           `Amount: ₹${parsedAmount.toLocaleString('en-IN')}\n` +
           `Receipt No: ${reference}\n` +
           `Transaction ID: ${finalTxnId}\n\n` +

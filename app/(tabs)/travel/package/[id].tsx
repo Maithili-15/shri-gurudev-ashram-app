@@ -13,10 +13,11 @@ import { useBookingDraftStore } from '../../../../src/store/useBookingDraftStore
 export default function PackageDetailsRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id } = useLocalSearchParams<{ id: string | string[] }>()
+  const packageId = Array.isArray(id) ? id[0] : id
   const setSelectedPackage = useBookingDraftStore((state) => state.setSelectedPackage)
   const { data = [], isLoading } = useQuery({ queryKey: ['travelPackages'], queryFn: fetchPackages })
-  const packageItem = data.find((item) => item.id === id)
+  const packageItem = data.find((item) => item.id === packageId)
 
   if (isLoading) {
     return (

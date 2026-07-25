@@ -56,6 +56,13 @@ type ActivityItem = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(iso: string): string {
   try {
+    if (!iso) return '—'
+    const cleanStr = iso.split('T')[0]
+    const parts = cleanStr.split('-').map(Number)
+    if (parts.length === 3 && !parts.some(isNaN)) {
+      const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+      return localDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
     return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   } catch { return iso }
 }

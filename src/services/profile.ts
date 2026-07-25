@@ -113,23 +113,37 @@ export async function updateCurrentProfile(input: {
   return mapProfile(user)
 }
 
+function getMimeTypeFromUri(imageUri: string): { mimeType: string; extension: string } {
+  const match = imageUri.match(/\.([a-zA-Z0-9]+)(?:[?#].*)?$/)
+  const extension = match ? match[1].toLowerCase() : 'jpg'
+  switch (extension) {
+    case 'png':
+      return { mimeType: 'image/png', extension: 'png' }
+    case 'webp':
+      return { mimeType: 'image/webp', extension: 'webp' }
+    case 'heic':
+      return { mimeType: 'image/heic', extension: 'heic' }
+    case 'heif':
+      return { mimeType: 'image/heif', extension: 'heif' }
+    case 'jpg':
+    case 'jpeg':
+    default:
+      return { mimeType: 'image/jpeg', extension: 'jpg' }
+  }
+}
+
 export async function uploadProfileImage(imageUri: string): Promise<string> {
   const formData = new FormData()
+  const { mimeType, extension } = getMimeTypeFromUri(imageUri)
   
-  // We need to fetch the file to get its type if we don't have it, but FormData in React Native
-  // can just take an object with uri, type, and name.
   formData.append('profileImage', {
     uri: imageUri,
-    type: 'image/jpeg', // Default, multer will check extensions if needed
-    name: `profile-${Date.now()}.jpg`,
+    type: mimeType,
+    name: `profile-${Date.now()}.${extension}`,
   } as any)
 
   try {
-    const { data } = await api.post<{ publicUrl: string }>('/api/users/upload-profile-image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    const { data } = await api.post<{ publicUrl: string }>('/api/users/upload-profile-image', formData)
     return data.publicUrl
   } catch (error) {
     throw new Error('Could not upload profile image. Please try again.')

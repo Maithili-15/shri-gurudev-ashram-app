@@ -9,13 +9,21 @@ import { Booking } from '../../../../src/types/travel'
 export default function BookingStatusRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { bookingId } = useLocalSearchParams<{ bookingId: string }>()
+  const { bookingId } = useLocalSearchParams<{ bookingId: string | string[] }>()
+  const idStr = Array.isArray(bookingId) ? bookingId[0] : bookingId
   const [booking, setBooking] = React.useState<Booking | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState('')
 
   const loadBooking = React.useCallback(async (refresh = false) => {
+    if (!idStr) {
+      setErrorMessage('Invalid booking parameter.')
+      setIsLoading(false)
+      setIsRefreshing(false)
+      return
+    }
+
     if (refresh) {
       setIsRefreshing(true)
     } else {
@@ -25,7 +33,7 @@ export default function BookingStatusRoute() {
     setErrorMessage('')
 
     try {
-      const bookingData = await getBookingById(bookingId)
+      const bookingData = await getBookingById(idStr)
       setBooking(bookingData)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not load booking status.')
