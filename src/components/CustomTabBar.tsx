@@ -37,10 +37,10 @@ const SCREEN_W = Dimensions.get('window').width
 /* ─── Tab definitions ─── */
 const LEFT_TABS = [
   { name: 'home', label: 'Home', icon: 'home-filled' as const, href: '/(tabs)/home' as const },
-  { name: 'travel', label: 'Travel', icon: 'explore' as const, href: '/(tabs)/travel' as const },
+  { name: 'donation', label: 'Donations', icon: 'volunteer-activism' as const, href: '/(tabs)/donation' as const },
 ]
 const RIGHT_TABS = [
-  { name: 'notifications', label: 'Alerts', icon: 'notifications-none' as const, href: '/(tabs)/notifications' as const },
+  { name: 'travel', label: 'Travel', icon: 'explore' as const, href: '/(tabs)/travel' as const },
   { name: 'profile', label: 'Profile', icon: 'person-outline' as const, href: '/(tabs)/profile' as const },
 ]
 
@@ -100,18 +100,13 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
   const bottomPadding = Math.max(insets.bottom, 8)
   const totalHeight = SVG_HEIGHT + bottomPadding
 
-  // Hide tab bar during travel and seva booking / payment / history flows
+  // Hide tab bar strictly during active checkout & receipt success screens
   const shouldHideTabBar =
-    pathname === '/travel/booking' ||
-    pathname.startsWith('/travel/booking/') ||
-    pathname.startsWith('/travel/booking-status/') ||
     pathname.startsWith('/travel/payment') ||
     pathname.startsWith('/travel/success') ||
     pathname.includes('/seva-payment') ||
     pathname.includes('/seva-success') ||
-    pathname.includes('/seva/annadan') ||
-    pathname.includes('/seva/yajman') ||
-    pathname.includes('/my-sevas')
+    pathname.includes('/donation-success')
 
   if (shouldHideTabBar) {
     return null
@@ -121,7 +116,12 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
 
   const renderTab = (item: { name: string; label: string; icon: string; href: string }) => {
     const routeIndex = state.routes.findIndex((r) => r.name === item.name)
-    const focused = state.index === routeIndex
+    const isRouteFocused = state.index === routeIndex
+    const isPathFocused =
+      pathname === item.href ||
+      (item.name === 'donation' && pathname.includes('/donation')) ||
+      (item.name === 'travel' && pathname.includes('/travel'))
+    const focused = isRouteFocused || isPathFocused
     const color = focused ? COLORS.active : COLORS.inactive
 
     return (
@@ -136,6 +136,8 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
     )
   }
 
+  const isSevaFocused = pathname.includes('/seva')
+
   return (
     <View style={[styles.container, { height: totalHeight }]}>
       {/* SVG background with notch */}
@@ -148,19 +150,19 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
         </Svg>
       </View>
 
-      {/* Donate button — positioned in the notch */}
+      {/* Center Seva Sponsorship button — positioned in the notch */}
       <View style={styles.buttonAnchor} pointerEvents="box-none">
         <Pressable
-          onPress={() => router.push('/donation' as never)}
+          onPress={() => router.navigate('/(tabs)/seva/annadan' as never)}
           style={styles.buttonRing}
         >
           <LinearGradient
-            colors={[COLORS.btnGradientStart, COLORS.btnGradientEnd]}
+            colors={isSevaFocused ? ['#E65C00', '#B8860B'] : [COLORS.btnGradientStart, COLORS.btnGradientEnd]}
             start={{ x: 0.3, y: 0 }}
             end={{ x: 0.7, y: 1 }}
             style={styles.buttonCircle}
           >
-            <MaterialIcons name="volunteer-activism" size={26} color="#fff" />
+            <MaterialIcons name="restaurant" size={26} color="#fff" />
           </LinearGradient>
         </Pressable>
       </View>
@@ -169,7 +171,7 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
       <View style={[styles.tabRow, { bottom: bottomPadding }]}>
         {LEFT_TABS.map(renderTab)}
 
-        {/* Center spacer for the donate button */}
+        {/* Center spacer for the seva button */}
         <View style={styles.centerSpacer} />
 
         {RIGHT_TABS.map(renderTab)}
