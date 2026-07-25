@@ -64,7 +64,7 @@ export default function SevaPaymentRoute() {
     setErrorMessage('')
 
     try {
-      const { order } = await createSevaOrder(sevaBookingId)
+      const { order } = await createSevaOrder(sevaBookingId, type)
 
       const checkoutResult = await RazorpayCheckout.open({
         key,
@@ -88,6 +88,7 @@ export default function SevaPaymentRoute() {
         razorpay_order_id: checkoutResult.razorpay_order_id,
         razorpay_payment_id: checkoutResult.razorpay_payment_id,
         razorpay_signature: checkoutResult.razorpay_signature,
+        sevaType: type,
       })
 
       router.replace({

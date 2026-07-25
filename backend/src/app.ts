@@ -11,6 +11,7 @@ import { razorpayWebhookRouter } from './routes/razorpayWebhook'
 import { usersRouter } from './routes/users'
 import { notificationsRouter } from './routes/notifications'
 import { sevaRouter } from './routes/seva'
+import { annadanRouter } from './routes/annadan'
 import { donationsRouter } from './routes/donations'
 import { donationPublicRouter } from './routes/donationPublic'
 import { donationAuthRouter } from './routes/donationAuth'
@@ -89,6 +90,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/users/login', authLimiter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/seva', sevaRouter)
+app.use('/api/annadan', annadanRouter)
 app.use('/api/donations', donationsRouter)
 app.use('/api/public', donationPublicRouter)
 app.use('/api/auth', authLimiter, donationAuthRouter)
