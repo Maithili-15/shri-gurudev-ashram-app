@@ -4,6 +4,7 @@ import { HttpError } from '../errors'
 import { razorpayWebhookSecret } from '../services/razorpay'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { Donation } from '../models/donation'
+import { NityaAnnadanBooking } from '../models/nityaAnnadan'
 import { generateReceipt, publicReceiptUrl } from '../services/donationReceipt'
 
 export const razorpayWebhookRouter = Router()
@@ -46,6 +47,18 @@ razorpayWebhookRouter.post('/', async (request, response, next) => {
     // raw-body signature validation and idempotent state transition.
     const donationOrderId = payload.payload?.payment?.entity?.order_id
     if (donationOrderId) {
+      const nityaBooking = await NityaAnnadanBooking.findOne({ razorpayOrderId: donationOrderId })
+      if (nityaBooking) {
+        const payment = payload.payload.payment.entity
+        if (payload.event === 'payment.captured' && nityaBooking.status !== 'paid') {
+          nityaBooking.status = 'paid'
+          nityaBooking.razorpayPaymentId = payment.id
+          await nityaBooking.save()
+        }
+        response.json({ received: true, nityaAnnadan: true })
+        return
+      }
+
       const donation = await Donation.findOne({ razorpayOrderId: donationOrderId })
       if (donation) {
         const payment = payload.payload.payment.entity

@@ -166,8 +166,8 @@ Last updated: July 2026.
 - Seat reservation locks booking for 15 minutes (`expires_at`). Unpaid expired bookings are automatically cleaned up by `expire_stale_bookings()`.
 
 ### Seva Booking & Dynamic Calendar Availability
-- Devotees sponsor full-day Mahaprasad (Annadan - ₹2,100) or Katha Sponsorship (Yajman - ₹5,100).
-- **Real-Time Calendar Availability**: Availability is fetched dynamically from the database using `GET /api/seva/availability?type=annadan&month=2026-07`.
+- Devotees sponsor full-day Mahaprasad (Nitya Annadan - ₹2,100, stored in MongoDB `NityaAnnadanBooking`) or Katha Sponsorship (Yajman - ₹5,100, stored in Supabase `seva_bookings`).
+- **Real-Time Calendar Availability**: Availability for Nitya Annadan is fetched from MongoDB using `GET /api/annadan/availability?month=2026-07` or `GET /api/annadan/availability?date=2026-07-20`, while Yajman availability is fetched from Supabase using `GET /api/seva/availability?type=yajman&month=2026-07`.
 - Backend counts confirmed/pending bookings (`paid`, `payment_pending`) for each date, compares against daily configured capacity (`SEVA_CAPACITY_ANNADAN`, `SEVA_CAPACITY_YAJMAN`), and returns date-keyed availability:
   ```json
   {
@@ -230,9 +230,9 @@ Last updated: July 2026.
 | `GET` | `/health` | Production health check & database latency check |
 | `GET` | `/api/packages` | List active travel packages with remaining seats & option pricing |
 | `GET` | `/api/packages/:id` | Get details for a specific travel package |
-| `GET` | `/api/seva/pricing` | Fetch dynamic Seva prices (Annadan & Yajman) |
-| `GET` | `/api/seva/availability` | Fetch month-wise Seva date availability (`?type=annadan&month=YYYY-MM`) |
-| `GET` | `/api/seva/:type/availability` | Fetch single-date or monthly availability for Seva |
+| `GET` | `/api/seva/pricing` | Fetch dynamic Yajman Seva price |
+| `GET` | `/api/seva/availability` | Fetch month-wise Yajman date availability (`?type=yajman&month=YYYY-MM`) |
+| `GET` | `/api/seva/:type/availability` | Fetch single-date or monthly availability for Yajman Seva |
 | `POST` | `/api/auth/verify-firebase-token` | Exchange Firebase ID token for Travel JWT |
 | `POST` | `/api/payments/webhook` | Razorpay webhook listener (deduplicated) |
 
@@ -250,10 +250,10 @@ Last updated: July 2026.
 | `POST` | `/api/bookings/:id/cancel` | Cancel an unpaid or pending travel booking |
 | `POST` | `/api/payments/create-order` | Create Razorpay order for travel booking |
 | `POST` | `/api/payments/verify` | Verify Razorpay payment signature & confirm booking |
-| `GET` | `/api/seva/history` | List user's past Seva bookings |
-| `POST` | `/api/seva` | Create a new Seva booking |
-| `POST` | `/api/payments/create-seva-order` | Create Razorpay order for Seva booking |
-| `POST` | `/api/payments/verify-seva` | Verify Razorpay signature & confirm Seva booking |
+| `GET` | `/api/seva/history` | List user's past Yajman Seva bookings |
+| `POST` | `/api/seva` | Create a new Yajman Seva booking |
+| `POST` | `/api/payments/create-seva-order` | Create Razorpay order for Yajman Seva booking |
+| `POST` | `/api/payments/verify-seva` | Verify Razorpay signature & confirm Yajman Seva booking |
 | `GET` | `/api/notifications` | List user notifications |
 | `PATCH` | `/api/notifications/:id/read` | Mark single notification as read |
 | `PATCH` | `/api/notifications/read-all` | Mark all user notifications as read |
@@ -270,8 +270,10 @@ Last updated: July 2026.
 | `POST` | `/api/auth/verify-token` | Exchange Firebase ID token for Donation JWT |
 | `POST` | `/api/donations/create` | Create a donation (Guest or Authenticated) |
 | `POST` | `/api/donations/webhook` | Razorpay webhook listener for donations |
+| `GET` | `/api/annadan/pricing` | Fetch Nitya Annadan dynamic price |
+| `GET` | `/api/annadan/availability` | Canonical availability check for Nitya Annadan (`?date=YYYY-MM-DD` or `?month=YYYY-MM`) |
 
-#### Protected Endpoints (Requires `Authorization: Bearer <Donation_JWT>`)
+#### Protected Endpoints (Requires Authorization)
 | Method | Route | Purpose |
 |---|---|---|
 | `GET` | `/api/donations/my-donations` | List user's donation history |
@@ -279,6 +281,11 @@ Last updated: July 2026.
 | `GET` | `/api/donations/:id/receipt` | Download 80G donation receipt |
 | `GET` | `/api/collector/dashboard` | Fetch collector performance stats |
 | `POST` | `/api/collector/apply` | Submit collector KYC application |
+| `POST` | `/api/annadan` | Create a Nitya Annadan date booking record |
+| `POST` | `/api/annadan/create-order` | Create Razorpay order for Nitya Annadan booking |
+| `POST` | `/api/annadan/verify-payment` | Verify Razorpay payment signature & confirm Nitya Annadan booking |
+| `GET` | `/api/annadan/upcoming` | Fetch user's upcoming Nitya Annadan bookings |
+| `GET` | `/api/annadan/history` | Fetch user's Nitya Annadan booking history |
 
 ---
 
@@ -432,7 +439,8 @@ CREATE TABLE public.notifications (
 ### MongoDB Schema
 
 - **`User` (`mainDb`)**: `fullName`, `email`, `mobile`, `role` (`USER`/`COLLECTOR_PENDING`/`COLLECTOR_APPROVED`), `referralCode`, `collectorProfile` (`kycStatus`, `aadhaarNumber`, `aadhaarFrontUrl`).
-- **`Donation` (`mainDb`)**: `user`, `collectorId`, `donor` (`name`, `mobile`, `pan`), `donationHead` (`id`, `name`), `amount`, `status`, `receiptNumber`, `receiptUrl`.
+- **`Donation` (`mainDb`)**: Regular Annadan and general monetary cause donations (`user`, `collectorId`, `donor` (`name`, `mobile`, `pan`), `donationHead` (`id`, `name`), `amount`, `status`, `receiptNumber`, `receiptUrl`).
+- **`NityaAnnadanBooking` (`mainDb`)**: Mobile app Nitya/Special Annadan calendar date sponsorships (`bookingReference`, `userId`, `sevaType: 'annadan'`, `sevaDate`, `fullName`, `phoneNumber`, `totalAmount`, `status` (`payment_pending`, `paid`, `cancelled`), `razorpayOrderId`, `razorpayPaymentId`, `razorpaySignature`). Cleanly isolated from `Donation`.
 - **`DonationHead` (`sharedDb`)**: `key`, `name`, `description`, `imageUrl`, `minAmount`, `presetAmounts`, `is80GEligible`, `isActive`.
 
 ---

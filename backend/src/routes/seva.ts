@@ -6,11 +6,11 @@ import crypto from 'crypto'
 
 export const sevaRouter = Router()
 
-// Common Seva Types from frontend
-type SevaType = 'annadan' | 'yajman' | 'gau_seva' | 'temple_seva' | 'special_pooja' | 'event'
+// Common Seva Types from frontend (Yajman, Gau Seva, Temple Seva, etc.)
+type SevaType = 'yajman' | 'gau_seva' | 'temple_seva' | 'special_pooja' | 'event'
 
-function generateSevaReference(type: SevaType): string {
-  const prefix = type === 'annadan' ? 'ANN' : type === 'yajman' ? 'YAJ' : 'SEV'
+function generateSevaReference(type: string): string {
+  const prefix = type === 'yajman' ? 'YAJ' : 'SEV'
   const random = crypto.randomBytes(3).toString('hex').toUpperCase()
   return `${prefix}-${random}`
 }
@@ -30,12 +30,16 @@ sevaRouter.post('/', requireAuth, async (request, response, next) => {
       throw new HttpError(400, 'Missing required seva fields')
     }
 
+    if (sevaType === 'annadan') {
+      throw new HttpError(400, 'Nitya Annadan seva is managed via the donation backend (/api/annadan)')
+    }
+
     const numericAmount = Number(totalAmount)
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       throw new HttpError(400, 'Invalid total amount')
     }
 
-    const bookingReference = generateSevaReference(sevaType as SevaType)
+    const bookingReference = generateSevaReference(sevaType)
     const userId = (request as AuthenticatedRequest).userId
 
     const { data, error } = await supabaseAdmin
@@ -90,6 +94,7 @@ sevaRouter.get('/upcoming', requireAuth, async (request, response, next) => {
       .from('seva_bookings')
       .select('*')
       .eq('user_id', userId)
+      .neq('seva_type', 'annadan')
       .in('status', ['paid', 'payment_pending'])
       .gte('seva_date', today)
       .order('seva_date', { ascending: true })
@@ -127,6 +132,7 @@ sevaRouter.get('/history', requireAuth, async (request, response, next) => {
       .from('seva_bookings')
       .select('*')
       .eq('user_id', userId)
+      .neq('seva_type', 'annadan')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -156,13 +162,11 @@ sevaRouter.get('/history', requireAuth, async (request, response, next) => {
 
 sevaRouter.get('/pricing', async (_request, response, next) => {
   try {
-    const annadanAmount = Number(process.env.ANNADAN_SEVA_PRICE ?? 2100)
     const yajmanAmount = Number(process.env.YAJMAN_SEVA_PRICE ?? 5100)
 
     response.json({
       success: true,
       pricing: {
-        annadan: annadanAmount,
         yajman: yajmanAmount,
       },
     })
@@ -176,8 +180,8 @@ sevaRouter.get('/availability', async (request, response, next) => {
     const type = ((request.query.type as string) || '').toLowerCase()
     const month = request.query.month as string // e.g. "2026-07"
 
-    if (!type || (type !== 'annadan' && type !== 'yajman')) {
-      throw new HttpError(400, 'type query parameter is required (annadan or yajman)')
+    if (!type || type !== 'yajman') {
+      throw new HttpError(400, 'type query parameter must be yajman for Supabase Seva backend')
     }
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -214,7 +218,7 @@ sevaRouter.get('/availability', async (request, response, next) => {
     }
 
     const envCapKey = `SEVA_CAPACITY_${type.toUpperCase()}`
-    const defaultCapacity = type === 'annadan' ? 100 : 50
+    const defaultCapacity = 50
     const capacity = Number(process.env[envCapKey] ?? defaultCapacity)
 
     const availabilityMap: Record<string, { booked: number; capacity: number; remaining: number; available: boolean }> = {}
@@ -248,8 +252,12 @@ sevaRouter.get('/:type/availability', async (request, response, next) => {
     const month = request.query.month as string
     const date = request.query.date as string
 
+    if (type !== 'yajman') {
+      throw new HttpError(400, 'Only yajman type is supported by Supabase Seva backend')
+    }
+
     const envCapKey = `SEVA_CAPACITY_${type.toUpperCase()}`
-    const defaultCapacity = type === 'annadan' ? 100 : 50
+    const defaultCapacity = 50
     const capacity = Number(process.env[envCapKey] ?? defaultCapacity)
 
     if (month && /^\d{4}-\d{2}$/.test(month)) {
