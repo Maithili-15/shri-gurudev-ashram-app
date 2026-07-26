@@ -21,3 +21,7 @@ export function normalizeDigits(value: string, maxLength: number) {
 export function isNonEmptyString(value: string) {
   return value.trim().length > 0;
 }
+
+export function isValidPanNumber(value: string) {
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(value.trim().toUpperCase());
+}

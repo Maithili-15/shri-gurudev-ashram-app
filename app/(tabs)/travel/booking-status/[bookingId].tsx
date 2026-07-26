@@ -66,7 +66,7 @@ export default function BookingStatusRoute() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadBooking(true)} />}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>

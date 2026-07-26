@@ -11,9 +11,12 @@ import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
 import { createSevaBooking, fetchSevaPricing } from '../../../../src/services/seva'
+import { PURPOSE_LABELS } from '../../../../src/features/annadan/constants'
+import { maskAadhaar, maskPan } from '../../../../src/utils/mask'
+import { useTabBarBottomPadding } from '../../../../src/hooks/useTabBarBottomPadding'
 
 // ─────────────────────────────────────────────────────────────────────────────
 function formatDateString(isoStr?: string): string {
@@ -24,14 +27,36 @@ function formatDateString(isoStr?: string): string {
   return localDate.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+function formatShortDate(isoStr?: string): string {
+  if (!isoStr) return '—'
+  const parts = isoStr.split('T')[0].split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+  return localDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 export default function AnnadanReviewRoute() {
   const router = useRouter()
-  const insets = useSafeAreaInsets()
+  const bottomPadding = useTabBarBottomPadding()
 
+  // ─── Store fields ─────────────────────────────────────────────────────
   const fullName = useSevaStore((s) => s.fullName)
   const phoneNumber = useSevaStore((s) => s.phoneNumber)
   const selectedDate = useSevaStore((s) => s.selectedDate)
   const setBookingResult = useSevaStore((s) => s.setBookingResult)
+
+  // New fields
+  const bookingPurpose = useSevaStore((s) => s.bookingPurpose)
+  const beneficiaryName = useSevaStore((s) => s.beneficiaryName)
+  const sponsorName = useSevaStore((s) => s.sponsorName)
+  const sponsorPhone = useSevaStore((s) => s.sponsorPhone)
+  const sponsorEmail = useSevaStore((s) => s.sponsorEmail)
+  const sponsorAddress = useSevaStore((s) => s.sponsorAddress)
+  const identityType = useSevaStore((s) => s.identityType)
+  const identityNumber = useSevaStore((s) => s.identityNumber)
+  const isRecurring = useSevaStore((s) => s.isRecurring)
+  const recurringStartDate = useSevaStore((s) => s.recurringStartDate)
+  const recurringEndDate = useSevaStore((s) => s.recurringEndDate)
 
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
@@ -42,6 +67,13 @@ export default function AnnadanReviewRoute() {
   }, [])
 
   const displayDate = formatDateString(selectedDate)
+  const purposeLabel = bookingPurpose ? PURPOSE_LABELS[bookingPurpose] : null
+  const maskedId = identityType && identityNumber
+    ? identityType === 'aadhaar' ? maskAadhaar(identityNumber) : maskPan(identityNumber)
+    : null
+  const recurringPeriod = isRecurring && recurringStartDate && recurringEndDate
+    ? `${formatShortDate(recurringStartDate)} — ${formatShortDate(recurringEndDate)}`
+    : null
 
   const onConfirmAndPay = async () => {
     setIsCreating(true)
@@ -50,9 +82,21 @@ export default function AnnadanReviewRoute() {
       const booking = await createSevaBooking({
         sevaType: 'annadan',
         sevaDate: selectedDate,
-        fullName,
-        phoneNumber,
+        fullName: sponsorName || fullName,
+        phoneNumber: sponsorPhone || phoneNumber,
         totalAmount: annadanPrice,
+        // New fields
+        bookingPurpose: bookingPurpose ?? undefined,
+        beneficiaryName: beneficiaryName || undefined,
+        sponsorName: sponsorName || undefined,
+        sponsorPhone: sponsorPhone || undefined,
+        email: sponsorEmail || undefined,
+        address: sponsorAddress || undefined,
+        identityType: identityType ?? undefined,
+        identityNumber: identityNumber || undefined,
+        isRecurring,
+        recurringStartDate: recurringStartDate || undefined,
+        recurringEndDate: recurringEndDate || undefined,
       })
       setBookingResult(booking.id, booking.bookingReference, booking.transactionId)
 
@@ -65,8 +109,17 @@ export default function AnnadanReviewRoute() {
           reference: booking.bookingReference,
           transactionId: booking.transactionId ?? '',
           sevaDate: selectedDate,
-          devotee: fullName,
-          phone: phoneNumber,
+          devotee: sponsorName || fullName,
+          phone: sponsorPhone || phoneNumber,
+          // Pass new fields for receipt
+          bookingPurpose: bookingPurpose ?? '',
+          beneficiaryName: beneficiaryName ?? '',
+          identityType: identityType ?? '',
+          identityNumberMasked: maskedId ?? '',
+          isRecurring: isRecurring ? 'true' : 'false',
+          recurringPeriod: recurringPeriod ?? '',
+          sponsorName: sponsorName ?? '',
+          sponsorPhone: sponsorPhone ?? '',
         },
       } as never)
     } catch (e) {
@@ -79,7 +132,7 @@ export default function AnnadanReviewRoute() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16, paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -88,9 +141,17 @@ export default function AnnadanReviewRoute() {
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />
           </Pressable>
           <View>
-            <Text style={styles.kicker}>Step 3 of 3</Text>
+            <Text style={styles.kicker}>Final Step</Text>
             <Text style={styles.title}>Review Booking</Text>
           </View>
+        </View>
+
+        {/* Progress */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: '100%' }]} />
+          </View>
+          <Text style={styles.progressText}>Review</Text>
         </View>
 
         {/* Summary card */}
@@ -107,9 +168,58 @@ export default function AnnadanReviewRoute() {
 
           <View style={styles.divider} />
 
-          <ReviewRow icon="event" label="Seva Date" value={displayDate} highlight />
-          <ReviewRow icon="person" label="Devotee Name" value={fullName} />
-          <ReviewRow icon="phone" label="Mobile Number" value={phoneNumber} />
+          {/* Purpose */}
+          {purposeLabel ? (
+            <ReviewRow icon="label" label="Purpose" value={purposeLabel} highlight />
+          ) : null}
+
+          {/* Beneficiary */}
+          {beneficiaryName ? (
+            <ReviewRow icon="person-outline" label="Beneficiary" value={beneficiaryName} />
+          ) : null}
+
+          {/* Booking Duration */}
+          <ReviewRow 
+            icon="schedule" 
+            label="Booking Duration" 
+            value={isRecurring ? 'Entire Year' : 'One-Time'} 
+          />
+
+          {/* Booking Period / Date */}
+          {isRecurring && recurringStartDate && recurringEndDate ? (
+            <ReviewRow
+              icon="date-range"
+              label="Booking Period"
+              value={
+                <View style={{ gap: 4, marginTop: 2 }}>
+                  <Text style={styles.reviewValue}>{formatShortDate(recurringStartDate)}</Text>
+                  <MaterialIcons name="arrow-downward" size={14} color="#B97512" style={{ marginLeft: 4 }} />
+                  <Text style={styles.reviewValue}>{formatShortDate(recurringEndDate)}</Text>
+                </View>
+              }
+            />
+          ) : (
+            <ReviewRow icon="event" label="Seva Date" value={displayDate} highlight />
+          )}
+
+          <View style={styles.divider} />
+
+          {/* Sponsor */}
+          <ReviewRow icon="person" label="Sponsor Name" value={sponsorName || fullName} />
+          <ReviewRow icon="phone" label="Mobile Number" value={sponsorPhone || phoneNumber} />
+          {sponsorEmail ? <ReviewRow icon="email" label="Email" value={sponsorEmail} /> : null}
+          {sponsorAddress ? <ReviewRow icon="home" label="Address" value={sponsorAddress} /> : null}
+
+          <View style={styles.divider} />
+
+          {/* Identity */}
+          {maskedId ? (
+            <ReviewRow
+              icon={identityType === 'aadhaar' ? 'fingerprint' : 'credit-card'}
+              label={identityType === 'aadhaar' ? 'Aadhaar Number' : 'PAN Number'}
+              value={maskedId}
+            />
+          ) : null}
 
           <View style={styles.divider} />
 
@@ -117,7 +227,9 @@ export default function AnnadanReviewRoute() {
           <View style={styles.amountBlock}>
             <Text style={styles.amountLabel}>Donation Amount</Text>
             <Text style={styles.amountValue}>₹{annadanPrice.toLocaleString('en-IN')}</Text>
-            <Text style={styles.amountNote}>Fixed amount · One-time donation</Text>
+            <Text style={styles.amountNote}>
+              {isRecurring ? 'Full-year booking fee' : 'Fixed amount · One-time donation'}
+            </Text>
           </View>
         </Animated.View>
 
@@ -167,7 +279,7 @@ function ReviewRow({
 }: {
   icon: string
   label: string
-  value: string
+  value: React.ReactNode
   highlight?: boolean
 }) {
   return (
@@ -177,7 +289,11 @@ function ReviewRow({
       </View>
       <View style={styles.reviewText}>
         <Text style={styles.reviewLabel}>{label}</Text>
-        <Text style={[styles.reviewValue, highlight && styles.reviewValueHighlight]}>{value}</Text>
+        {typeof value === 'string' ? (
+          <Text style={[styles.reviewValue, highlight && styles.reviewValueHighlight]}>{value}</Text>
+        ) : (
+          value
+        )}
       </View>
     </View>
   )
@@ -196,6 +312,17 @@ const styles = StyleSheet.create({
   },
   kicker: { color: '#E65C00', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.2 },
   title: { color: '#2B231B', fontSize: 26, fontWeight: '900', marginTop: 2 },
+
+  progressContainer: { gap: 6 },
+  progressTrack: {
+    height: 6, borderRadius: 3,
+    backgroundColor: '#E8D5BE', overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%', borderRadius: 3,
+    backgroundColor: '#2F7132',
+  },
+  progressText: { color: '#2F7132', fontSize: 12, fontWeight: '700', textAlign: 'right' },
 
   summaryCard: {
     backgroundColor: '#fff', borderRadius: 28, padding: 22,

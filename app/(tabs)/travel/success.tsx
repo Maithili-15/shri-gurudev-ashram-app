@@ -42,6 +42,9 @@ export default function SuccessRoute() {
         createdAt: booking.createdAt,
         transportType: booking.transportType,
         roomType: booking.roomType,
+        additionalSevaType: booking.additionalSevaType,
+        additionalSevaDate: booking.additionalSevaDate,
+        additionalSevaAmount: booking.additionalSevaAmount,
       }
     : null
 
@@ -75,7 +78,7 @@ export default function SuccessRoute() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Success icon */}
@@ -91,9 +94,26 @@ export default function SuccessRoute() {
         </View>
 
         <Text style={styles.kicker}>Payment successful</Text>
-        <Text style={styles.title}>Your yatra booking is confirmed!</Text>
+        <Text style={styles.title}>Booking Confirmed!</Text>
+        
+        <View style={styles.confirmBadgesRow}>
+          <View style={styles.confirmBadge}>
+            <MaterialIcons name="check-circle" size={18} color="#2F7132" />
+            <Text style={styles.confirmBadgeText}>Yatra Booking Confirmed</Text>
+          </View>
+
+          {booking?.additionalSevaType && booking.additionalSevaType !== 'none' ? (
+            <View style={styles.confirmBadge}>
+              <MaterialIcons name="check-circle" size={18} color="#2F7132" />
+              <Text style={styles.confirmBadgeText}>
+                {booking.additionalSevaType === 'guruji_aarti' ? 'Guruji Aarti Seva Confirmed' : 'Yajman Pad Booking Confirmed'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
         <Text style={styles.subtitle}>
-          Your payment was verified and your seat count has been secured. Safe travels and Jai Shri Gurudev!
+          Your payment was verified and your reservation has been secured. Jai Shri Gurudev!
         </Text>
 
         {/* Receipt or skeleton */}
@@ -167,6 +187,14 @@ const styles = StyleSheet.create({
   kicker: { color: '#E65C00', textAlign: 'center', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.4 },
   title: { color: '#2B231B', textAlign: 'center', fontSize: 28, fontWeight: '900', lineHeight: 34 },
   subtitle: { color: '#7E7162', textAlign: 'center', fontSize: 14, lineHeight: 22, paddingHorizontal: 16 },
+
+  confirmBadgesRow: { gap: 8, marginVertical: 4, alignItems: 'center' },
+  confirmBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#EEF8EF', paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1, borderColor: '#D0EBD2',
+  },
+  confirmBadgeText: { color: '#2F7132', fontSize: 13, fontWeight: '800' },
 
   loadingWrap: { alignItems: 'center', gap: 10, paddingVertical: 32 },
   loadingText: { color: '#9E9080', fontSize: 13, fontWeight: '600' },

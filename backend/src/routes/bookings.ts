@@ -24,6 +24,8 @@ type CreateBookingBody = {
   busType?: string
   roomType?: string
   passengers?: CreateBookingPassengerInput[]
+  additionalSevaType?: string
+  additionalSevaDate?: string
 }
 
 bookingsRouter.post('/', requireAuth, async (request, response, next) => {
@@ -36,6 +38,8 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
       busType,
       roomType,
       passengers,
+      additionalSevaType,
+      additionalSevaDate,
     } = request.body as CreateBookingBody
 
     // 1. Required fields and empty value checks
@@ -156,7 +160,20 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
     }
 
     const packageUnitPrice = baseUnitPrice + transportAddon + roomAddon
-    const totalAmount = packageUnitPrice * travelerCount
+    let additionalSevaPrice = 0
+
+    if (additionalSevaType && additionalSevaType !== 'none') {
+      if (!['guruji_aarti', 'yajman_pad', 'yajman'].includes(additionalSevaType)) {
+        throw new HttpError(400, 'Invalid additionalSevaType. Allowed: guruji_aarti, yajman_pad')
+      }
+      if (!additionalSevaDate || !/^\d{4}-\d{2}-\d{2}$/.test(additionalSevaDate)) {
+        throw new HttpError(400, 'additionalSevaDate is required in YYYY-MM-DD format')
+      }
+
+      additionalSevaPrice = additionalSevaType === 'guruji_aarti' ? 2100 : Number(process.env.YAJMAN_SEVA_PRICE ?? 5100)
+    }
+
+    const totalAmount = (packageUnitPrice * travelerCount) + additionalSevaPrice
 
     const bookingReference = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
     const authRequest = request as AuthenticatedRequest
@@ -211,6 +228,9 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         transport_type: transportType,
         bus_type: transportType === 'Train' ? busType : null,
         room_type: roomType,
+        additional_seva_type: additionalSevaType ?? null,
+        additional_seva_date: additionalSevaDate ?? null,
+        additional_seva_amount: additionalSevaPrice > 0 ? additionalSevaPrice : null,
       })
       .select('*')
       .single()
@@ -269,6 +289,23 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         if (documentError) {
           throw new Error(documentError.message ?? 'Failed to insert documents')
         }
+      }
+
+      // 6c. Insert Linked Seva Booking (for single source of truth availability)
+      if (additionalSevaType && additionalSevaType !== 'none' && additionalSevaDate) {
+        const sevaRef = `SEV-${bookingReference}`
+        const sevaBookingType = additionalSevaType === 'guruji_aarti' ? 'yajman' : 'yajman'
+        await supabaseAdmin.from('seva_bookings').insert({
+          booking_reference: sevaRef,
+          user_id: authRequest.userId,
+          seva_type: sevaBookingType,
+          seva_date: additionalSevaDate,
+          full_name: leadPassenger.fullName.trim(),
+          phone_number: leadPassenger.phone.trim(),
+          total_amount: additionalSevaPrice,
+          status: 'payment_pending',
+          notes: `Additional Seva with Yatra Booking ${bookingReference}`,
+        })
       }
 
     } catch (txError) {

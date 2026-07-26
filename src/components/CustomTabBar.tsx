@@ -30,6 +30,7 @@ const LABEL_SIZE = 11
 
 // Button protrudes ~65% above bar. The SVG canvas needs extra height for the notch.
 const BUTTON_ABOVE = BUTTON_OUTER * 0.65
+export const CUSTOM_TAB_BAR_BASE_HEIGHT = TAB_BAR_HEIGHT + BUTTON_ABOVE // 116.8
 const SVG_EXTRA = BUTTON_ABOVE // extra SVG height above the bar for the notch
 const SVG_HEIGHT = TAB_BAR_HEIGHT + SVG_EXTRA
 const SCREEN_W = Dimensions.get('window').width
@@ -37,10 +38,10 @@ const SCREEN_W = Dimensions.get('window').width
 /* ─── Tab definitions ─── */
 const LEFT_TABS = [
   { name: 'home', label: 'Home', icon: 'home-filled' as const, href: '/(tabs)/home' as const },
-  { name: 'donation', label: 'Donations', icon: 'volunteer-activism' as const, href: '/(tabs)/donation' as const },
+  { name: 'travel', label: 'Yatra', icon: 'explore' as const, href: '/(tabs)/travel' as const },
 ]
 const RIGHT_TABS = [
-  { name: 'travel', label: 'Travel', icon: 'explore' as const, href: '/(tabs)/travel' as const },
+  { name: 'notifications', label: 'Alerts', icon: 'notifications-none' as const, href: '/(tabs)/notifications' as const },
   { name: 'profile', label: 'Profile', icon: 'person-outline' as const, href: '/(tabs)/profile' as const },
 ]
 
@@ -119,15 +120,16 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
     const isRouteFocused = state.index === routeIndex
     const isPathFocused =
       pathname === item.href ||
-      (item.name === 'donation' && pathname.includes('/donation')) ||
-      (item.name === 'travel' && pathname.includes('/travel'))
+      (item.name === 'travel' && pathname.includes('/travel')) ||
+      (item.name === 'notifications' && pathname.includes('/notifications')) ||
+      (item.name === 'profile' && pathname.includes('/profile'))
     const focused = isRouteFocused || isPathFocused
     const color = focused ? COLORS.active : COLORS.inactive
 
     return (
       <Pressable
         key={item.name}
-        onPress={() => router.navigate(item.href as never)}
+        onPress={() => router.push(item.href as never)}
         style={styles.tabButton}
       >
         <MaterialIcons name={item.icon as any} size={ICON_SIZE} color={color} />
@@ -136,7 +138,7 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
     )
   }
 
-  const isSevaFocused = pathname.includes('/seva')
+  const isDonationFocused = pathname.includes('/donation')
 
   return (
     <View style={[styles.container, { height: totalHeight }]}>
@@ -150,19 +152,19 @@ export default function CustomTabBar({ state, navigation }: CustomTabBarProps) {
         </Svg>
       </View>
 
-      {/* Center Seva Sponsorship button — positioned in the notch */}
+      {/* Floating Center Donate button — positioned in the notch */}
       <View style={styles.buttonAnchor} pointerEvents="box-none">
         <Pressable
-          onPress={() => router.navigate('/(tabs)/seva/annadan' as never)}
+          onPress={() => router.push('/(tabs)/donation' as never)}
           style={styles.buttonRing}
         >
           <LinearGradient
-            colors={isSevaFocused ? ['#E65C00', '#B8860B'] : [COLORS.btnGradientStart, COLORS.btnGradientEnd]}
-            start={{ x: 0.3, y: 0 }}
-            end={{ x: 0.7, y: 1 }}
+            colors={isDonationFocused ? ['#E65C00', '#B8860B'] : ['#E65C00', '#FF9933']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.buttonCircle}
           >
-            <MaterialIcons name="restaurant" size={26} color="#fff" />
+            <MaterialIcons name="volunteer-activism" size={28} color="#fff" />
           </LinearGradient>
         </Pressable>
       </View>

@@ -158,7 +158,7 @@ export default function TravelListRoute() {
     <SafeAreaView style={styles.container}>
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 12) }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 12 }]}
       >
         <View style={styles.topSection}>
           <Text style={styles.topSectionTitle}>YATRA PACKAGES</Text>

@@ -122,7 +122,7 @@ export default function PaymentRoute() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadBooking(true)} />}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -130,42 +130,82 @@ export default function PaymentRoute() {
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />
           </Pressable>
           <View>
-            <Text style={styles.kicker}>Razorpay checkout</Text>
-            <Text style={styles.title}>Complete payment</Text>
+            <Text style={styles.kicker}>Final Review & Checkout</Text>
+            <Text style={styles.title}>Confirm & Pay</Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <View style={styles.iconWrap}>
-            <MaterialIcons name="payments" size={34} color="#E65C00" />
+          <View style={styles.headerBadgeRow}>
+            <View style={styles.iconWrap}>
+              <MaterialIcons name="card-membership" size={32} color="#B97512" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.packageTitle}>{booking?.packageTitle ?? 'Yatra Booking'}</Text>
+              <Text style={styles.reference}>Ref: {booking?.bookingReference ?? bookingReference ?? bookingId}</Text>
+            </View>
           </View>
-          <Text style={styles.reference}>{booking?.bookingReference ?? bookingReference ?? bookingId}</Text>
-          
+
+          <View style={styles.divider} />
+
+          {/* Traveler Details */}
+          <View style={styles.infoRow}>
+            <MaterialIcons name="person" size={18} color="#7E7162" />
+            <Text style={styles.infoText}>
+              Lead Devotee: <Text style={styles.infoBold}>{booking?.fullName ?? '—'}</Text> ({booking?.travelerCount ?? 1} {(booking?.travelerCount ?? 1) === 1 ? 'Person' : 'Persons'})
+            </Text>
+          </View>
+
+          {booking?.transportType ? (
+            <View style={styles.infoRow}>
+              <MaterialIcons name="directions-bus" size={18} color="#7E7162" />
+              <Text style={styles.infoText}>
+                Route & Stay: <Text style={styles.infoBold}>{booking.transportType}</Text> • <Text style={styles.infoBold}>{booking.roomType ?? 'Standard Room'}</Text>
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Price Breakdown */}
           {(() => {
-            const baseAmount = booking?.totalAmount ?? 0;
-            const convenienceFee = Math.round(baseAmount * 0.02);
-            const totalPayable = baseAmount + convenienceFee;
+            const total = booking?.totalAmount ?? 0
+            const sevaAmount = booking?.additionalSevaAmount ?? 0
+            const yatraAmount = total - sevaAmount
+
             return (
               <View style={styles.breakdown}>
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Base Amount</Text>
-                  <Text style={styles.breakdownValue}>₹{baseAmount.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.breakdownLabel}>Yatra Package ({booking?.travelerCount ?? 1} travelers)</Text>
+                  <Text style={styles.breakdownValue}>₹{yatraAmount.toLocaleString('en-IN')}</Text>
                 </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Convenience Fee (2%)</Text>
-                  <Text style={styles.breakdownValue}>₹{convenienceFee.toLocaleString('en-IN')}</Text>
-                </View>
+
+                {booking?.additionalSevaType && booking.additionalSevaType !== 'none' ? (
+                  <>
+                    <View style={styles.breakdownDivider} />
+                    <View style={styles.breakdownRow}>
+                      <View>
+                        <Text style={styles.breakdownSevaTitle}>
+                          {booking.additionalSevaType === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'}
+                        </Text>
+                        {booking.additionalSevaDate ? (
+                          <Text style={styles.breakdownSevaDate}>Date: {booking.additionalSevaDate}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.breakdownSevaValue}>+₹{sevaAmount.toLocaleString('en-IN')}</Text>
+                    </View>
+                  </>
+                ) : null}
+
                 <View style={styles.breakdownDivider} />
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownTotalLabel}>Total Payable</Text>
-                  <Text style={styles.breakdownTotalValue}>₹{totalPayable.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.breakdownTotalLabel}>Total Amount</Text>
+                  <Text style={styles.breakdownTotalValue}>₹{total.toLocaleString('en-IN')}</Text>
                 </View>
               </View>
-            );
+            )
           })()}
 
           <Text style={styles.description}>
-            Your payment will be verified by the backend. Seats are reserved only after successful payment.
+            Your payment will be securely processed by Razorpay. Single payment guarantees combined reservation.
           </Text>
         </View>
 
@@ -185,7 +225,13 @@ export default function PaymentRoute() {
             end={{ x: 1, y: 1 }}
             style={styles.primaryButton}
           >
-            {isPaying ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Pay with Razorpay</Text>}
+            {isPaying ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {booking ? `Proceed to Pay ₹${booking.totalAmount.toLocaleString('en-IN')}` : 'Proceed to Pay'}
+              </Text>
+            )}
           </LinearGradient>
         </Pressable>
       </ScrollView>
@@ -211,21 +257,29 @@ const styles = StyleSheet.create({
   },
   kicker: { color: '#E65C00', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.2 },
   title: { color: '#2B231B', fontSize: 26, fontWeight: '900', marginTop: 2 },
-  card: { borderRadius: 30, backgroundColor: '#fff', padding: 24, borderWidth: 1, borderColor: '#F0E7DD', alignItems: 'center', gap: 12 },
-  iconWrap: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#FFF0D9', alignItems: 'center', justifyContent: 'center' },
-  reference: { color: '#7E7162', fontSize: 13, fontWeight: '900' },
-  amount: { color: '#2B231B', fontSize: 34, fontWeight: '900' },
-  description: { color: '#7E7162', fontSize: 14, lineHeight: 22, textAlign: 'center' },
+  card: { borderRadius: 30, backgroundColor: '#fff', padding: 20, borderWidth: 1, borderColor: '#F0E7DD', gap: 14 },
+  headerBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF0D9', alignItems: 'center', justifyContent: 'center' },
+  packageTitle: { color: '#2B231B', fontSize: 18, fontWeight: '900' },
+  reference: { color: '#7E7162', fontSize: 12, fontWeight: '700', marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#F0E7DD', marginVertical: 4 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoText: { color: '#7E7162', fontSize: 13, flex: 1 },
+  infoBold: { color: '#2B231B', fontWeight: '800' },
+  description: { color: '#7E7162', fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 4 },
   successBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 18, backgroundColor: '#EEF8EF', padding: 14 },
   successText: { color: '#2F7132', fontSize: 13, fontWeight: '800' },
   errorText: { color: '#D32F2F', fontSize: 13, fontWeight: '800', lineHeight: 20 },
   primaryButton: { minHeight: 58, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  breakdown: { width: '100%', gap: 12, marginTop: 8, marginBottom: 8, backgroundColor: '#FAF6F0', padding: 16, borderRadius: 20 },
+  breakdown: { width: '100%', gap: 10, marginTop: 4, backgroundColor: '#FAF6F0', padding: 16, borderRadius: 20 },
   breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  breakdownLabel: { color: '#7E7162', fontSize: 14, fontWeight: '600' },
+  breakdownLabel: { color: '#7E7162', fontSize: 13, fontWeight: '600' },
   breakdownValue: { color: '#2B231B', fontSize: 14, fontWeight: '800' },
-  breakdownDivider: { height: 1, backgroundColor: '#E8D5BE', marginVertical: 4 },
-  breakdownTotalLabel: { color: '#2B231B', fontSize: 16, fontWeight: '900' },
+  breakdownSevaTitle: { color: '#B97512', fontSize: 14, fontWeight: '800' },
+  breakdownSevaDate: { color: '#9E9080', fontSize: 11, fontWeight: '600' },
+  breakdownSevaValue: { color: '#B97512', fontSize: 14, fontWeight: '800' },
+  breakdownDivider: { height: 1, backgroundColor: '#E8D5BE', marginVertical: 2 },
+  breakdownTotalLabel: { color: '#2B231B', fontSize: 15, fontWeight: '900' },
   breakdownTotalValue: { color: '#E65C00', fontSize: 18, fontWeight: '900' },
 })

@@ -43,6 +43,7 @@ Last updated: July 2026.
    - [Health Monitoring](#health-monitoring)
    - [Environment Variables](#environment-variables)
    - [VPS, PM2 & Nginx Setup](#vps-pm2--nginx-setup)
+8. [Decision Log](#8-decision-log)
 
 ---
 
@@ -549,3 +550,237 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/api.mavt.in/privkey.pem;
 }
 ```
+
+---
+
+## 8. Decision Log
+
+### Decision
+Moved calendar from `index.tsx` to `StepDate.tsx`.
+
+### Reason
+The booking flow redesign requires the purpose selection (Birthday, Smruti, Pitrayartha, General) to happen before date selection.
+
+### Impact
+No navigation route name changes. Maintained backward compatibility.
+
+### Files
+- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
+- [StepDate.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepDate.tsx)
+
+---
+
+### Decision
+Deconstructed `details.tsx` into lightweight, modular step components (`StepDate`, `StepRecurring`, `StepBeneficiary`, `StepSponsor`, `StepIdentity`) instead of a single large file.
+
+### Reason
+Improves readability, maintainability, and makes debugging much simpler.
+
+### Impact
+Clean components with isolated state logic, using Zustand as the single source of truth.
+
+### Files
+- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
+- `src/features/annadan/steps/*`
+
+---
+
+### Decision
+Encrypted Aadhaar and PAN numbers at rest in MongoDB using AES-256-GCM.
+
+### Reason
+Sensitive PII must not be stored in plaintext.
+
+### Impact
+Data is encrypted before being saved and only decrypted on the server when needed (e.g. for generating receipts). Frontend only receives and displays masked versions.
+
+### Files
+- [encryption.ts](file:///c:/shri-gurudev-ashram-app/backend/src/utils/encryption.ts)
+- [nityaAnnadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/models/nityaAnnadan.ts)
+- [annadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/annadan.ts)
+
+---
+
+### Decision
+Stored additional recurring booking details (`isRecurring`, `recurringFrequency`, `recurringStartDate`, `recurringEndDate`, `nextExecutionDate`, `lastExecutedDate`).
+
+### Reason
+Ensure schema supports automated future renewals of Annadan bookings via an offline/async job.
+
+### Impact
+Ensures that recurring scheduling database fields are captured at the point of booking creation.
+
+### Files
+- [nityaAnnadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/models/nityaAnnadan.ts)
+- [annadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/annadan.ts)
+
+---
+
+### Decision
+Refactored the conditional `Animated.View` entering layout animation wrapper around the "Continue" CTA button in `StepDate.tsx` into a unified, non-dynamically mounted `Pressable` with conditional styles.
+
+### Reason
+In Reanimated 3+ layout animations on Android release builds (APK/App Mode), dynamically mounting an `Animated.View` with layout entering transitions (like `FadeInDown`) can cause native touch responders to fail to bind or misalign layout coordinate bounds, rendering the button unresponsive to clicks.
+
+### Impact
+Fixes the click responsiveness in release mode while standardizing button rendering styles across all step components.
+
+### Files
+- [StepDate.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepDate.tsx)
+
+---
+
+### Decision
+Applied dynamic bottom padding offsets equivalent to `tabBarHeight + 24` to the ScrollView content containers in all main Annadan routing screens (`index.tsx`, `details.tsx`, and `review.tsx`).
+
+### Reason
+The custom floating bottom navigation bar has a visible and notch-concave SVG height of `116.8 + Math.max(insets.bottom, 8)` pixels. In screens nested inside the `(tabs)` navigator, this floating bar overlaps the bottommost components of pages (such as CTA Continue or Review Submit buttons) unless the ScrollView content area explicitly padds it out.
+
+### Impact
+Ensures that all CTA buttons and critical bottom card items scroll completely above the custom floating tab bar, making them visible and clickable on all form factors and devices.
+
+### Files
+- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
+- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
+- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/review.tsx)
+
+---
+
+### Decision
+Refined the Annadan booking flow UI and display logic to implement finalized business requirements (consisting of exactly three purposes: Birthday, Smruti Pitrayartha, and General Annadan, and changing the subscription terminology to "Book for the Entire Year").
+
+### Reason
+Devotees preferred a one-time 12-month date reservation duration over subscription/recurring payment semantics, and the Ashram consolidated historical purposes to a single Smruti Pitrayartha option. We implemented this in the presentation layer (UI) to prevent breaking database enums, API structures, or payment integration code.
+
+### Impact
+* Refactored `StepRecurring.tsx` to use a premium selectable card toggle layout.
+* Updated Review & Receipt screens to display `Booking Duration: Entire Year / One-Time` and clean vertical `Booking Period` timelines.
+* Mapped legacy `smruti` and `pitrayartha` databases values to `"Smruti Pitrayartha"` on receipts for 100% backward compatibility.
+* Retained legacy variables (`isRecurring`, `recurringStartDate`, `recurringEndDate`) internally in types/store/backend.
+
+### Files
+- [constants.ts](file:///c:/shri-gurudev-ashram-app/src/features/annadan/constants.ts)
+- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
+- [StepRecurring.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepRecurring.tsx)
+- [StepBeneficiary.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepBeneficiary.tsx)
+- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/review.tsx)
+- [SevaReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/SevaReceipt.tsx)
+
+---
+
+### Decision
+Implemented Major Architecture Enhancement unifying Yatra Booking, Guruji Aarti Seva, and Yajman Pad Booking into a single-checkout booking engine with backend-authoritative pricing and a single source of truth availability ledger.
+
+### Reason
+Devotees required the ability to book Guruji Aarti Seva or Yajman Pad Booking directly from the drawer menu, or add one as an additional spiritual service during Yatra booking without creating separate Razorpay payment orders.
+
+### Impact
+* Expanded left navigation drawer in `home.tsx` with direct navigation entries.
+* Refactored `app/(tabs)/seva/yajman/index.tsx`, `details.tsx`, `review.tsx` into a generic booking engine supporting `type=aarti` and `type=yajman_pad`.
+* Added Step 4 ("Enhance Your Spiritual Journey") to `BookingForm.tsx` with mutually exclusive radio-card choices.
+* Encapsulated addon state cleanly in `useBookingDraftStore.ts` under `addonService: { type, bookingDate, amount }`.
+* Backend authoritatively looks up pricing, verifies availability against `seva_bookings`, inserts linked `seva_bookings` entries for single source of truth availability, and generates a single Razorpay payment order.
+* Updated `TravelReceipt.tsx` to display itemized additional spiritual service charges and breakdown.
+
+### Files
+- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
+- [useBookingDraftStore.ts](file:///c:/shri-gurudev-ashram-app/src/store/useBookingDraftStore.ts)
+- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/index.tsx)
+- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/details.tsx)
+- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/review.tsx)
+- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
+- [travel.ts](file:///c:/shri-gurudev-ashram-app/src/types/travel.ts)
+- [bookings.ts](file:///c:/shri-gurudev-ashram-app/src/services/bookings.ts)
+- [bookings.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/bookings.ts)
+- [payments.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/payments.ts)
+- [TravelReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/TravelReceipt.tsx)
+- [success.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/success.tsx)
+
+---
+
+### Decision
+Optimized the Yatra Booking Flow by making Step 4 (Additional Spiritual Service) the final decision point before checkout and enhancing the Payment screen (`app/(tabs)/travel/payment.tsx`) to act as the unified final review & summary screen.
+
+### Reason
+Removing the redundant intermediate review screen simplifies the user experience, reduces friction, and allows devotees to review the complete itemized breakdown (Yatra Package + Additional Seva + Selected Dates + Total Amount) in a single place before initiating Razorpay checkout.
+
+### Impact
+* Streamlined Yatra wizard: Step 1 (Route) → Step 2 (Comfort Tier) → Step 3 (Personal Info & Documents) → Step 4 (Additional Spiritual Service) → Payment.
+* Enhanced `payment.tsx` to render an itemized summary card detailing Yatra package charges, additional spiritual service options & dates, lead traveler info, and total amount.
+* Directly triggers single Razorpay payment from the summary screen.
+
+### Files
+- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
+- [payment.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/payment.tsx)
+
+---
+
+### Decision
+Refined the Home page "Essential Services" section by removing the duplicate "Guruji Aarti Seva" card, creating a perfectly balanced 2-column grid layout (3 × 2 = 6 services).
+
+### Reason
+Guruji Aarti Seva is already accessible via the Navigation Drawer and as an embedded add-on during Yatra booking. Removing it from the Home page prevents duplicate entry points and balances the grid cleanly without leaving empty spaces.
+
+### Impact
+* Rebalanced Essential Services grid to 6 services: Yatra Booking, Annadan, Donations, My Activity, Collector Registration, Announcements.
+* Perfectly aligned 3-row, 2-column layout adhering to Sacred Minimalism guidelines.
+* Guruji Aarti Seva booking functionality remains intact via Drawer & Yatra Add-on.
+
+### Files
+- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
+
+---
+
+### Decision
+Embedded an in-place interactive monthly availability calendar (`SevaInlineCalendar`) directly below the selected option on Step 4 ("Enhance Your Spiritual Journey") of Yatra Booking, and added dual confirmation badges to the Success screen.
+
+### Reason
+Allows devotees to view and select available Guruji Aarti or Yajman Pad dates directly within the Yatra booking step without screen navigation, and provides explicit confirmation badges for both Yatra and Seva on completion.
+
+### Impact
+* Expanded `SevaInlineCalendar` directly underneath "Guruji Aarti Seva" or "Yajman Pad Booking" card selection on Step 4.
+* Reused real-time `fetchSevaMonthlyAvailability` ledger to disable already reserved or past dates.
+* Updated `success.tsx` to display dual confirmation badges (`✓ Yatra Booking Confirmed`, `✓ Guruji Aarti Seva Confirmed` / `✓ Yajman Pad Booking Confirmed`).
+
+### Files
+- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
+- [success.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/success.tsx)
+
+---
+
+### Decision
+Refined the Annadan Seva purpose selection screen (`app/(tabs)/seva/annadan/index.tsx`) typography, copy, and card spacing.
+
+### Reason
+The previous question heading ("Why are you performing Annadan?") had a negative top margin on the subtitle causing overlap when the heading wrapped onto 2 lines.
+
+### Impact
+* Replaced heading with natural statement: **"Select the Purpose of Annadan"**.
+* Updated subtitle to: **"Choose the occasion for offering your Annadan Seva."**.
+* Set clean typography (`fontSize: 24`, `fontWeight: '800'`, `lineHeight: 32`, `marginTop: 4`) with zero negative margins.
+* Added generous bottom spacing below the hero sponsorship chip card before the purpose section.
+
+### Files
+- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
+
+---
+
+### Decision
+Restructured the bottom navigation bar and drawer menu to highlight **Donate** as the primary action.
+
+### Reason
+Aligns navigation with Sacred Minimalism design guidelines and simplifies key user actions.
+
+### Impact
+* **Bottom Tab Bar**:
+  - `Home`: `/(tabs)/home`
+  - `Yatra`: `/(tabs)/travel`
+  - **🪙 Donate (Floating Center Button)**: `/(tabs)/donation` with saffron/gold gradient (`['#E65C00', '#FF9933']`), white ring border, and elevated shadow.
+  - `Alerts`: `/(tabs)/notifications`
+  - `Profile`: `/(tabs)/profile`
+* **Navigation Drawer**: Cleanly includes Home, Yatra Booking, Guruji Aarti Seva, Yajman Pad Booking, Donations, My Bookings, Profile.
+
+### Files
+- [CustomTabBar.tsx](file:///c:/shri-gurudev-ashram-app/src/components/CustomTabBar.tsx)
+- [_layout.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/_layout.tsx)
+- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)

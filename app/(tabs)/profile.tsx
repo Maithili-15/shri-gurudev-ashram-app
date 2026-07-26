@@ -152,7 +152,7 @@ export default function ProfileRoute() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadProfile(true)} />}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
       >
         <View style={styles.header}>
           <Avatar profile={displayProfile} />

@@ -1,5 +1,9 @@
 import type { SevaType } from '../constants/seva';
 
+// ─── Booking Purpose ──────────────────────────────────────────────────────────
+export type AnnadanBookingPurpose = 'birthday' | 'smruti' | 'pitrayartha' | 'general';
+export type IdentityType = 'aadhaar' | 'pan';
+
 // ─── Seva Booking ─────────────────────────────────────────────────────────────
 export type SevaBookingStatus = 'payment_pending' | 'paid' | 'cancelled';
 
@@ -15,6 +19,19 @@ export type SevaBooking = {
   status: SevaBookingStatus;
   createdAt: string;
   notes?: string;
+  // ─── Annadan Redesign Fields ────────────────────────────────────────────────
+  bookingPurpose?: AnnadanBookingPurpose;
+  beneficiaryName?: string;
+  sponsorName?: string;
+  sponsorPhone?: string;
+  email?: string;
+  address?: string;
+  identityType?: IdentityType;
+  identityNumberMasked?: string;
+  isRecurring?: boolean;
+  recurringFrequency?: string;
+  recurringStartDate?: string;
+  recurringEndDate?: string;
 };
 
 // ─── Create Input ─────────────────────────────────────────────────────────────
@@ -25,6 +42,18 @@ export type CreateSevaBookingInput = {
   phoneNumber: string;
   totalAmount: number;
   notes?: string;
+  // ─── Annadan Redesign Fields ────────────────────────────────────────────────
+  bookingPurpose?: AnnadanBookingPurpose;
+  beneficiaryName?: string;
+  sponsorName?: string;
+  sponsorPhone?: string;
+  email?: string;
+  address?: string;
+  identityType?: IdentityType;
+  identityNumber?: string;
+  isRecurring?: boolean;
+  recurringStartDate?: string;
+  recurringEndDate?: string;
 };
 
 // ─── Receipt Display ──────────────────────────────────────────────────────────
@@ -40,6 +69,15 @@ export type SevaReceiptData = {
   paymentMethod: string;
   status: SevaBookingStatus;
   referenceNumber: string;
+  // ─── Annadan Redesign Fields ────────────────────────────────────────────────
+  bookingPurpose?: string;
+  beneficiaryName?: string;
+  sponsorName?: string;
+  sponsorPhone?: string;
+  identityType?: string;
+  identityNumberMasked?: string;
+  isRecurring?: boolean;
+  recurringPeriod?: string;     // e.g. "15 Aug 2026 — 15 Aug 2027"
 };
 
 // ─── Upcoming Seva (for Home screen feed) ────────────────────────────────────
@@ -50,3 +88,4 @@ export type UpcomingSeva = {
   isAvailable: boolean;
   spotsLeft?: number;
 };
+

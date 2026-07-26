@@ -385,4 +385,17 @@ async function captureBookingPayment(input: {
   if (error) {
     throw new HttpError(500, error.message)
   }
+
+  // Also update any linked seva_bookings for additional spiritual service
+  try {
+    const { data: booking } = await supabaseAdmin.from('bookings').select('booking_reference').eq('id', input.bookingId).maybeSingle()
+    if (booking?.booking_reference) {
+      await supabaseAdmin
+        .from('seva_bookings')
+        .update({ status: 'paid', razorpay_order_id: input.razorpayOrderId })
+        .eq('notes', `Additional Seva with Yatra Booking ${booking.booking_reference}`)
+    }
+  } catch (e) {
+    console.error('Failed to sync linked seva_bookings status:', e)
+  }
 }

@@ -4,6 +4,7 @@ import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
 import { NityaAnnadanBooking } from '../models/nityaAnnadan'
 import { razorpay, razorpayKeySecret } from '../services/razorpay'
+import { encryptIdentity, maskIdentityNumber } from '../utils/encryption'
 
 export const annadanRouter = Router()
 
@@ -26,12 +27,36 @@ export function formatBooking(doc: any) {
     notes: doc.notes ?? null,
     razorpayOrderId: doc.razorpayOrderId ?? null,
     razorpayPaymentId: doc.razorpayPaymentId ?? null,
+    // ─── Annadan Redesign Fields ───────────────────────────────────────────
+    bookingPurpose: doc.bookingPurpose ?? null,
+    beneficiaryName: doc.beneficiaryName ?? null,
+    sponsorName: doc.sponsorName ?? null,
+    sponsorPhone: doc.sponsorPhone ?? null,
+    email: doc.email ?? null,
+    address: doc.address ?? null,
+    identityType: doc.identityType ?? null,
+    identityNumberMasked: doc.identityNumberMasked ?? null,
+    isRecurring: doc.isRecurring ?? false,
+    recurringFrequency: doc.recurringFrequency ?? null,
+    recurringStartDate: doc.recurringStartDate ?? null,
+    recurringEndDate: doc.recurringEndDate ?? null,
     createdAt: doc.createdAt ? (doc.createdAt.toISOString ? doc.createdAt.toISOString() : doc.createdAt) : new Date().toISOString(),
     updatedAt: doc.updatedAt ? (doc.updatedAt.toISOString ? doc.updatedAt.toISOString() : doc.updatedAt) : new Date().toISOString(),
   }
 }
 
 // ─── Create Nitya Annadan Booking ─────────────────────────────────────────────
+const VALID_PURPOSES = ['birthday', 'smruti', 'pitrayartha', 'general']
+const VALID_IDENTITY_TYPES = ['aadhaar', 'pan']
+
+function isValidPan(value: string): boolean {
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(value.trim().toUpperCase())
+}
+
+function isValidAadhaar(value: string): boolean {
+  return /^\d{12}$/.test(value.trim())
+}
+
 export async function createAnnadanBooking(request: Request, response: Response, next: NextFunction) {
   try {
     const {
@@ -41,6 +66,18 @@ export async function createAnnadanBooking(request: Request, response: Response,
       phoneNumber,
       totalAmount,
       notes,
+      // ─── New fields ────────────────────────────────────────────────────
+      bookingPurpose,
+      beneficiaryName,
+      sponsorName,
+      sponsorPhone,
+      email,
+      address,
+      identityType,
+      identityNumber,
+      isRecurring,
+      recurringStartDate,
+      recurringEndDate,
     } = request.body ?? {}
 
     if (!sevaDate || !fullName || !phoneNumber || !totalAmount) {
@@ -50,6 +87,29 @@ export async function createAnnadanBooking(request: Request, response: Response,
     const numericAmount = Number(totalAmount)
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       throw new HttpError(400, 'Invalid total amount')
+    }
+
+    // Validate booking purpose if provided
+    if (bookingPurpose && !VALID_PURPOSES.includes(bookingPurpose)) {
+      throw new HttpError(400, 'Invalid booking purpose')
+    }
+
+    // Validate identity if provided
+    let encryptedIdentity: string | null = null
+    let maskedIdentity: string | null = null
+    if (identityType && identityNumber) {
+      if (!VALID_IDENTITY_TYPES.includes(identityType)) {
+        throw new HttpError(400, 'Identity type must be aadhaar or pan')
+      }
+      const cleanNumber = String(identityNumber).trim()
+      if (identityType === 'aadhaar' && !isValidAadhaar(cleanNumber)) {
+        throw new HttpError(400, 'Aadhaar must be exactly 12 digits')
+      }
+      if (identityType === 'pan' && !isValidPan(cleanNumber)) {
+        throw new HttpError(400, 'PAN must be in format ABCDE1234F')
+      }
+      encryptedIdentity = encryptIdentity(cleanNumber)
+      maskedIdentity = maskIdentityNumber(identityType, cleanNumber)
     }
 
     const bookingReference = generateBookingReference()
@@ -65,6 +125,22 @@ export async function createAnnadanBooking(request: Request, response: Response,
       totalAmount: numericAmount,
       status: 'payment_pending',
       notes: notes ? String(notes).trim() : null,
+      // ─── New fields ────────────────────────────────────────────────────
+      bookingPurpose: bookingPurpose || null,
+      beneficiaryName: beneficiaryName ? String(beneficiaryName).trim() : null,
+      sponsorName: sponsorName ? String(sponsorName).trim() : null,
+      sponsorPhone: sponsorPhone ? String(sponsorPhone).trim() : null,
+      email: email ? String(email).trim() : null,
+      address: address ? String(address).trim() : null,
+      identityType: identityType || null,
+      identityNumber: encryptedIdentity,
+      identityNumberMasked: maskedIdentity,
+      isRecurring: isRecurring === true,
+      recurringFrequency: isRecurring === true ? 'yearly' : null,
+      recurringStartDate: isRecurring === true && recurringStartDate ? String(recurringStartDate) : null,
+      recurringEndDate: isRecurring === true && recurringEndDate ? String(recurringEndDate) : null,
+      nextExecutionDate: isRecurring === true && recurringEndDate ? String(recurringEndDate) : null,
+      lastExecutedDate: null,
     })
 
     response.status(201).json({

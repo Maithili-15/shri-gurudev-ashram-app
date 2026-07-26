@@ -67,7 +67,7 @@ export default function NotificationsRoute() {
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor="#8B5A00" />}
         ListEmptyComponent={
           <View style={styles.centerCard}>

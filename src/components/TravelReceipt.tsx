@@ -26,6 +26,9 @@ export type TravelReceiptData = {
   createdAt?: string | null
   transportType?: string | null
   roomType?: string | null
+  additionalSevaType?: string | null
+  additionalSevaDate?: string | null
+  additionalSevaAmount?: number | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,6 +178,24 @@ export default function TravelReceipt({ data }: { data: TravelReceiptData }) {
           <ReceiptRow label="Accommodation" value={data.roomType} />
         ) : null}
 
+        {data.additionalSevaType && data.additionalSevaType !== 'none' ? (
+          <>
+            <View style={styles.divider} />
+            <ReceiptRow
+              label="Additional Service"
+              value={data.additionalSevaType === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'}
+              highlight
+            />
+            {data.additionalSevaDate ? (
+              <ReceiptRow label="Seva Date" value={formatDate(data.additionalSevaDate)} />
+            ) : null}
+            {data.additionalSevaAmount ? (
+              <ReceiptRow label="Seva Charge" value={formatAmount(data.additionalSevaAmount)} />
+            ) : null}
+          </>
+        ) : null}
+
+        <View style={styles.divider} />
         <ReceiptRow label="Total Amount" value={formatAmount(data.totalAmount)} highlight />
         <ReceiptRow label="Payment Method" value="Razorpay / Online" />
 

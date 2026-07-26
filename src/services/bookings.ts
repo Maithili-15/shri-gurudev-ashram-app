@@ -23,6 +23,9 @@ type BookingApiRow = {
   transport_type?: string | null;
   bus_type?: string | null;
   room_type?: string | null;
+  additional_seva_type?: string | null;
+  additional_seva_date?: string | null;
+  additional_seva_amount?: number | null;
 };
 type PackageSelection = Pick<Database["public"]["Tables"]["travel_packages"]["Row"], "title" | "start_date" | "end_date"> | null;
 type BookingHistoryRow = BookingApiRow & {
@@ -66,6 +69,9 @@ function mapBookingRow(row: BookingApiRow, options?: { packageTitle?: string; tr
     transportType: row.transport_type ?? undefined,
     busType: row.bus_type ?? undefined,
     roomType: row.room_type ?? undefined,
+    additionalSevaType: row.additional_seva_type ?? undefined,
+    additionalSevaDate: row.additional_seva_date ?? undefined,
+    additionalSevaAmount: row.additional_seva_amount ?? undefined,
   };
 }
 

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SevaType } from '../constants/seva';
-import type { SevaBooking } from '../types/seva';
+import type { AnnadanBookingPurpose, IdentityType, SevaBooking } from '../types/seva';
 
 // ─── Devotee Form Fields ──────────────────────────────────────────────────────
 export type SevaDevoteeFields = {
@@ -27,6 +27,19 @@ export type SevaStoreState = {
   bookingReference: string | null;
   transactionId: string | null;
 
+  // ─── Annadan Redesign Fields ────────────────────────────────────────────────
+  bookingPurpose: AnnadanBookingPurpose | null;
+  beneficiaryName: string;
+  sponsorName: string;
+  sponsorPhone: string;
+  sponsorEmail: string;
+  sponsorAddress: string;
+  identityType: IdentityType | null;
+  identityNumber: string;
+  isRecurring: boolean;
+  recurringStartDate: string;
+  recurringEndDate: string;
+
   // History — all completed/confirmed bookings this session
   // Phase 2: replace with API call on My Sevas screen mount
   sevaHistory: SevaBooking[];
@@ -42,6 +55,17 @@ export type SevaStoreState = {
   addToHistory: (booking: SevaBooking) => void;
   updateBookingStatus: (id: string, status: SevaBooking['status']) => void;
   resetSeva: () => void;
+  // ─── Annadan field setters ──────────────────────────────────────────────────
+  setBookingPurpose: (purpose: AnnadanBookingPurpose) => void;
+  setBeneficiaryName: (name: string) => void;
+  setSponsorName: (name: string) => void;
+  setSponsorPhone: (phone: string) => void;
+  setSponsorEmail: (email: string) => void;
+  setSponsorAddress: (address: string) => void;
+  setIdentityType: (type: IdentityType | null) => void;
+  setIdentityNumber: (number: string) => void;
+  setIsRecurring: (recurring: boolean) => void;
+  setRecurringDates: (start: string, end: string) => void;
 };
 
 // ─── Initial State ────────────────────────────────────────────────────────────
@@ -53,6 +77,18 @@ const initialBookingState = {
   bookingId: null,
   bookingReference: null,
   transactionId: null,
+  // Annadan redesign defaults
+  bookingPurpose: null,
+  beneficiaryName: '',
+  sponsorName: '',
+  sponsorPhone: '',
+  sponsorEmail: '',
+  sponsorAddress: '',
+  identityType: null,
+  identityNumber: '',
+  isRecurring: false,
+  recurringStartDate: '',
+  recurringEndDate: '',
 } as const;
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -83,6 +119,18 @@ export const useSevaStore = create<SevaStoreState>()(
         })),
 
       resetSeva: () => set({ ...initialBookingState }),
+
+      // ─── Annadan field setters ────────────────────────────────────────────────
+      setBookingPurpose: (purpose) => set({ bookingPurpose: purpose }),
+      setBeneficiaryName: (name) => set({ beneficiaryName: name }),
+      setSponsorName: (name) => set({ sponsorName: name }),
+      setSponsorPhone: (phone) => set({ sponsorPhone: phone }),
+      setSponsorEmail: (email) => set({ sponsorEmail: email }),
+      setSponsorAddress: (address) => set({ sponsorAddress: address }),
+      setIdentityType: (type) => set({ identityType: type, identityNumber: '' }),
+      setIdentityNumber: (number) => set({ identityNumber: number }),
+      setIsRecurring: (recurring) => set({ isRecurring: recurring }),
+      setRecurringDates: (start, end) => set({ recurringStartDate: start, recurringEndDate: end }),
     }),
     {
       name: 'ashram-seva-storage',
@@ -91,3 +139,4 @@ export const useSevaStore = create<SevaStoreState>()(
     }
   )
 );
+

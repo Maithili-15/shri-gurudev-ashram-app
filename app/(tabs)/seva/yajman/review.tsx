@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
@@ -25,6 +25,9 @@ function formatDateString(isoStr?: string): string {
 
 export default function YajmanReviewRoute() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ type?: string }>()
+  const isAartiMode = params.type === 'aarti'
+  const titleText = isAartiMode ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'
   const insets = useSafeAreaInsets()
 
   const fullName = useSevaStore((s) => s.fullName)
@@ -34,11 +37,11 @@ export default function YajmanReviewRoute() {
 
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
-  const [yajmanPrice, setYajmanPrice] = useState(5100)
+  const [yajmanPrice, setYajmanPrice] = useState(isAartiMode ? 2100 : 5100)
 
   React.useEffect(() => {
-    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(p.yajman) }).catch(() => {})
-  }, [])
+    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(isAartiMode ? 2100 : p.yajman) }).catch(() => {})
+  }, [isAartiMode])
 
   const displayDate = formatDateString(selectedDate)
 
@@ -78,7 +81,7 @@ export default function YajmanReviewRoute() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -97,8 +100,8 @@ export default function YajmanReviewRoute() {
               <MaterialIcons name="local-fire-department" size={28} color="#B97512" />
             </View>
             <View>
-              <Text style={styles.summaryType}>Guruji Aarti Seva</Text>
-              <Text style={styles.summarySubtype}>Yajman Booking</Text>
+              <Text style={styles.summaryType}>{titleText}</Text>
+              <Text style={styles.summarySubtype}>Spiritual Seva</Text>
             </View>
           </View>
 

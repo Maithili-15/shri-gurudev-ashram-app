@@ -16,30 +16,38 @@ export type PassengerDraft = {
   selfieImageUri?: string;
 };
 
+export type AddonServiceDraft = {
+  type: 'guruji_aarti' | 'yajman_pad'
+  bookingDate: string
+  amount: number
+} | null
+
 export type BookingDraftValues = {
-  transportType: TransportType | "";
-  busType: BusType | "";
-  roomType: RoomType | "";
-  numberOfTravelers: string;
-  specialNotes: string;
-  passengers: PassengerDraft[];
-};
+  transportType: TransportType | ""
+  busType: BusType | ""
+  roomType: RoomType | ""
+  numberOfTravelers: string
+  specialNotes: string
+  passengers: PassengerDraft[]
+  addonService: AddonServiceDraft
+}
 
 export type BookingDraftState = {
-  selectedPackage: TravelPackage | null;
+  selectedPackage: TravelPackage | null
 } & BookingDraftValues & {
-    setSelectedPackage: (packageItem: TravelPackage) => void;
+    setSelectedPackage: (packageItem: TravelPackage) => void
+    setAddonService: (addon: AddonServiceDraft) => void
     updateField: <K extends keyof BookingDraftValues>(
       field: K,
       value: BookingDraftValues[K],
-    ) => void;
+    ) => void
     updatePassengerField: <K extends keyof PassengerDraft>(
       index: number,
       field: K,
       value: PassengerDraft[K],
-    ) => void;
-    resetDraft: () => void;
-  };
+    ) => void
+    resetDraft: () => void
+  }
 
 export const initialPassenger: PassengerDraft = {
   fullName: "",
@@ -49,7 +57,7 @@ export const initialPassenger: PassengerDraft = {
   phone: "",
   address: "",
   aadhaarNumber: "",
-};
+}
 
 const initialState: BookingDraftValues = {
   transportType: "",
@@ -58,7 +66,8 @@ const initialState: BookingDraftValues = {
   numberOfTravelers: "1",
   specialNotes: "",
   passengers: [{ ...initialPassenger }],
-};
+  addonService: null,
+}
 
 export const useBookingDraftStore = create<BookingDraftState>()(
   persist(
@@ -66,6 +75,7 @@ export const useBookingDraftStore = create<BookingDraftState>()(
       selectedPackage: null,
       ...initialState,
       setSelectedPackage: (packageItem) => set({ selectedPackage: packageItem }),
+      setAddonService: (addon) => set({ addonService: addon }),
       updateField: (field, value) => {
         set((state) => {
           const updates = { [field]: value } as Partial<BookingDraftState>;

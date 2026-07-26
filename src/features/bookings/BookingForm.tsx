@@ -17,16 +17,17 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTabBarBottomPadding } from '../../hooks/useTabBarBottomPadding'
 import { createBooking } from '../../services/bookings'
 import { refreshCurrentUser } from '../../services/auth'
 import { uploadAadhaar, uploadSelfie } from '../../services/verification'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useBookingDraftStore } from '../../store/useBookingDraftStore'
 import { BusType, RoomType, TransportType } from '../../utils/yatraPricing'
-import { getFriendlyApiError } from '../../utils/apiErrors'
 import { isNonEmptyString, isValidPhoneNumber, normalizeDigits, isValidAadhaarNumber } from '../../utils/validation'
 import ImageUploadWidget from '../../components/ImageUploadWidget'
+import { fetchSevaMonthlyAvailability } from '../../services/seva'
 
 const COLORS = {
   background: '#FAF6F0',
@@ -50,7 +51,158 @@ const STEP_TITLES = [
   { key: 'transport', label: '1', title: 'Route style' },
   { key: 'stay', label: '2', title: 'Comfort tier' },
   { key: 'traveler', label: '3', title: 'Personal info' },
+  { key: 'additional_seva', label: '4', title: 'Additional Seva' },
 ] as const
+
+const ADDON_SERVICE_OPTIONS = [
+  {
+    value: 'none',
+    title: 'No Additional Service',
+    description: 'Proceed directly with your Yatra booking without an additional seva.',
+    icon: 'do-not-disturb-alt',
+    price: 0,
+  },
+  {
+    value: 'guruji_aarti',
+    title: 'Guruji Aarti Seva',
+    description: 'Receive the sacred privilege of performing Guruji\'s Aarti during the Katha.',
+    icon: 'local-fire-department',
+    price: 2100,
+  },
+  {
+    value: 'yajman_pad',
+    title: 'Yajman Pad Booking',
+    description: 'Become the principal Yajman devotee during the sacred Katha discourse.',
+    icon: 'self-improvement',
+    price: 5100,
+  },
+]
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+function buildCalendarGrid(year: number, month: number) {
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (Date | null)[] = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
+  return cells
+}
+
+function SevaInlineCalendar({
+  selectedIso,
+  onSelectDate,
+  sevaTitle,
+}: {
+  selectedIso: string
+  onSelectDate: (isoDate: string) => void
+  sevaTitle: string
+}) {
+  const today = new Date()
+  const [viewYear, setViewYear] = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [monthlyAvailability, setMonthlyAvailability] = useState<Record<string, { available: boolean }>>({})
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+    setLoading(true)
+    fetchSevaMonthlyAvailability('yajman', monthStr)
+      .then((map) => setMonthlyAvailability(map))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [viewYear, viewMonth])
+
+  const cells = buildCalendarGrid(viewYear, viewMonth)
+  const isPast = (d: Date) => {
+    const check = new Date(d); check.setHours(0,0,0,0)
+    const t = new Date(today); t.setHours(0,0,0,0)
+    return check < t
+  }
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }
+    else setViewMonth((m) => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0) }
+    else setViewMonth((m) => m + 1)
+  }
+
+  return (
+    <View style={styles.inlineCalBox}>
+      <Text style={styles.inlineCalHeader}>Select {sevaTitle} Date</Text>
+      <View style={styles.inlineMonthNav}>
+        <TouchableOpacity onPress={prevMonth} style={styles.inlineNavBtn}>
+          <MaterialIcons name="chevron-left" size={22} color="#8B5A00" />
+        </TouchableOpacity>
+        <Text style={styles.inlineMonthLabel}>{MONTHS[viewMonth]} {viewYear}</Text>
+        <TouchableOpacity onPress={nextMonth} style={styles.inlineNavBtn}>
+          <MaterialIcons name="chevron-right" size={22} color="#8B5A00" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.inlineWeekRow}>
+        {WEEKDAYS.map((w) => (
+          <Text key={w} style={styles.inlineWeekDay}>{w}</Text>
+        ))}
+      </View>
+
+      {loading ? (
+        <View style={{ padding: 18, alignItems: 'center' }}>
+          <Text style={{ color: '#8B5A00', fontSize: 13 }}>Loading dates…</Text>
+        </View>
+      ) : (
+        <View style={styles.inlineGrid}>
+          {cells.map((date, i) => {
+            if (!date) return <View key={`empty-${i}`} style={styles.inlineCell} />
+            const iso = date.toISOString().split('T')[0]
+            const past = isPast(date)
+            const isSelected = iso === selectedIso
+            const dayInfo = monthlyAvailability[iso]
+            const booked = past ? false : (dayInfo ? !dayInfo.available : false)
+            const dotColor = past ? '#C04545' : booked ? '#E65C00' : '#2F7132'
+
+            return (
+              <TouchableOpacity
+                key={iso}
+                style={[
+                  styles.inlineCell,
+                  isSelected && styles.inlineCellSelected,
+                  (past || booked) && styles.inlineCellPast,
+                ]}
+                disabled={past || booked}
+                onPress={() => onSelectDate(iso)}
+                activeOpacity={0.75}
+              >
+                <Text style={[
+                  styles.inlineCellText,
+                  isSelected && styles.inlineCellTextSelected,
+                  (past || booked) && styles.inlineCellTextPast,
+                ]}>
+                  {date.getDate()}
+                </Text>
+                <View style={[styles.inlineDot, { backgroundColor: isSelected ? '#fff' : dotColor }]} />
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      )}
+
+      <View style={styles.inlineLegendRow}>
+        <View style={styles.inlineLegendItem}>
+          <View style={[styles.inlineLegendDot, { backgroundColor: '#2F7132' }]} />
+          <Text style={styles.inlineLegendText}>Available</Text>
+        </View>
+        <View style={styles.inlineLegendItem}>
+          <View style={[styles.inlineLegendDot, { backgroundColor: '#E65C00' }]} />
+          <Text style={styles.inlineLegendText}>Already Reserved</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
 
 const TRANSPORT_OPTIONS: Array<{ value: TransportType; title: string; description: string; icon: string }> = [
   { value: 'Flight', title: 'Himalayan Flight Arrival', description: 'Serene flights with guided transfer support.', icon: 'flight' },
@@ -200,7 +352,7 @@ const PassengerCard = React.memo(({ index, currentUser, isSubmitting, fieldError
 
       <Text style={styles.groupLabel}>Gender</Text>
       <View style={styles.choiceList}>
-        {[{ value: 'male', title: 'Male' }, { value: 'female', title: 'Female' }, { value: 'other', title: 'Other' }].map((option) => (
+        {[{ value: 'male', title: 'Male' }, { value: 'female', title: 'Female' }].map((option) => (
           <ChoiceCard
             key={option.value}
             title={option.title}
@@ -271,6 +423,8 @@ export default function BookingForm() {
 
   const updateField = useBookingDraftStore((state) => state.updateField)
   const selectedPackage = useBookingDraftStore((state) => state.selectedPackage)
+  const addonService = useBookingDraftStore((state) => state.addonService)
+  const setAddonService = useBookingDraftStore((state) => state.setAddonService)
   const [stepIndex, setStepIndex] = useState(0)
   const [activeDatePickerIndex, setActiveDatePickerIndex] = useState<number | null>(null)
 
@@ -284,7 +438,7 @@ export default function BookingForm() {
   const currentUser = useAuthStore((state) => state.user)
   const updatePassengerField = useBookingDraftStore((state) => state.updatePassengerField)
   const scrollViewRef = React.useRef<ScrollView>(null)
-  const insets = useSafeAreaInsets()
+  const bottomPadding = useTabBarBottomPadding(32)
 
   const transportType = transportTypeState || 'Flight'
   const busType = busTypeState || 'AC Train'
@@ -309,7 +463,9 @@ export default function BookingForm() {
 
   const baseUnitPrice = selectedPackage?.priceAmount || parsePriceAmount(selectedPackage?.price)
   const packageUnitAmount = useMemo(() => baseUnitPrice + transportAddon + roomAddon, [baseUnitPrice, transportAddon, roomAddon])
-  const totalAmount = useMemo(() => packageUnitAmount * travelerCount, [packageUnitAmount, travelerCount])
+  const yatraTotal = useMemo(() => packageUnitAmount * travelerCount, [packageUnitAmount, travelerCount])
+  const addonTotal = addonService?.amount || 0
+  const totalAmount = useMemo(() => yatraTotal + addonTotal, [yatraTotal, addonTotal])
   const step = STEP_TITLES[stepIndex]
 
   useEffect(() => {
@@ -431,6 +587,8 @@ export default function BookingForm() {
         busType: transportType === 'Train' ? busType : undefined,
         roomType,
         passengers: passengersWithDocs,
+        additionalSevaType: addonService?.type ?? undefined,
+        additionalSevaDate: addonService?.bookingDate ?? undefined,
       })
 
       router.push(
@@ -468,11 +626,11 @@ export default function BookingForm() {
   const minimumDate = new Date(today.getFullYear() - 110, today.getMonth(), today.getDate())
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -684,6 +842,86 @@ export default function BookingForm() {
                     <Text style={styles.secondaryButtonText}>Back</Text>
                   </TouchableOpacity>
                   <PrimaryButton
+                    title="Continue"
+                    onPress={() => setStepIndex(3)}
+                    style={styles.actionPrimary}
+                  />
+                </View>
+              </View>
+            ) : null}
+
+            {step.key === 'additional_seva' ? (
+              <View style={styles.sectionGap}>
+                <View>
+                  <Text style={styles.sectionTitle}>Enhance Your Spiritual Journey</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Would you like to include an additional spiritual service with your Yatra booking?
+                  </Text>
+                </View>
+
+                <View style={styles.choiceList}>
+                  {ADDON_SERVICE_OPTIONS.map((option) => {
+                    const isSelected = option.value === 'none' ? !addonService : addonService?.type === option.value
+                    return (
+                      <React.Fragment key={option.value}>
+                        <ChoiceCard
+                          title={option.title}
+                          description={option.description}
+                          icon={option.icon}
+                          priceBadge={option.price > 0 ? `+₹${option.price.toLocaleString('en-IN')}` : undefined}
+                          selected={isSelected}
+                          onPress={() => {
+                            if (option.value === 'none') {
+                              setAddonService(null)
+                            } else {
+                              const todayIso = new Date().toISOString().split('T')[0]
+                              setAddonService({
+                                type: option.value as 'guruji_aarti' | 'yajman_pad',
+                                bookingDate: addonService?.type === option.value ? addonService.bookingDate : todayIso,
+                                amount: option.price,
+                              })
+                            }
+                          }}
+                        />
+                        {isSelected && option.value !== 'none' ? (
+                          <SevaInlineCalendar
+                            selectedIso={addonService?.bookingDate ?? ''}
+                            sevaTitle={option.title}
+                            onSelectDate={(isoDate) => {
+                              if (addonService) {
+                                setAddonService({ ...addonService, bookingDate: isoDate })
+                              }
+                            }}
+                          />
+                        ) : null}
+                      </React.Fragment>
+                    )
+                  })}
+                </View>
+
+                {addonService && !addonService.bookingDate ? (
+                  <Text style={styles.errorText}>
+                    Please select an available date for your {addonService.type === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'} on the calendar above.
+                  </Text>
+                ) : null}
+
+                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+                <View style={styles.priceCard}>
+                  <Text style={styles.priceCardLabel}>Estimated Total</Text>
+                  <Text style={styles.priceValue}>{formatAmount(totalAmount)}</Text>
+                  <Text style={styles.paymentNote}>
+                    {addonService
+                      ? `Yatra Package (${formatAmount(yatraTotal)}) + Additional Seva (${formatAmount(addonTotal)})`
+                      : 'Includes Yatra Package and selected travel options.'}
+                  </Text>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.secondaryButton} disabled={isSubmitting} onPress={() => setStepIndex(2)}>
+                    <Text style={styles.secondaryButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  <PrimaryButton
                     title={isSubmitting ? 'Submitting' : 'Submit Booking'}
                     onPress={submitBooking}
                     disabled={isSubmitting}
@@ -700,13 +938,13 @@ export default function BookingForm() {
         <Modal transparent animationType="fade" visible onRequestClose={() => setActiveDatePickerIndex(null)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setActiveDatePickerIndex(null)}>
             <Pressable style={styles.modalCard} onPress={() => undefined}>
-              <Text style={styles.modalTitle}>Select Date of Birth</Text>
+              <Text style={styles.modalTitle}>{activeDatePickerIndex === -1 ? 'Select Additional Seva Date' : 'Select Date of Birth'}</Text>
               <DateTimePicker
-                value={activeDob ? new Date(activeDob) : new Date(1995, 0, 1)}
+                value={activeDatePickerIndex === -1 && addonService ? new Date(addonService.bookingDate) : activeDob ? new Date(activeDob) : new Date(1995, 0, 1)}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-                maximumDate={new Date()}
-                minimumDate={minimumDate}
+                maximumDate={activeDatePickerIndex === -1 ? undefined : new Date()}
+                minimumDate={activeDatePickerIndex === -1 ? new Date() : minimumDate}
                 onChange={(event: any, selectedDate?: Date) => {
                   if (event.type === 'dismissed' || !selectedDate) {
                     if (Platform.OS !== 'ios') {
@@ -715,8 +953,14 @@ export default function BookingForm() {
                     return
                   }
                   const isoDate = selectedDate.toISOString().split('T')[0]
-                  updatePassengerField(activeDatePickerIndex, 'dob', isoDate)
-                  updatePassengerField(activeDatePickerIndex, 'age', calculateAge(isoDate))
+                  if (activeDatePickerIndex === -1) {
+                    if (addonService) {
+                      setAddonService({ ...addonService, bookingDate: isoDate })
+                    }
+                  } else if (activeDatePickerIndex !== null) {
+                    updatePassengerField(activeDatePickerIndex, 'dob', isoDate)
+                    updatePassengerField(activeDatePickerIndex, 'age', calculateAge(isoDate))
+                  }
                   if (Platform.OS !== 'ios') {
                     setActiveDatePickerIndex(null)
                   }
@@ -894,5 +1138,29 @@ const styles = StyleSheet.create({
   modalButtonText: { color: COLORS.primaryDark, fontSize: 15, fontWeight: '800' },
   infoCard: { flexDirection: 'row', gap: 10, borderRadius: 18, backgroundColor: '#FFF8ED', padding: 14, borderWidth: 1, borderColor: '#FFE0B3' },
   infoText: { color: '#7E5C00', fontSize: 13, lineHeight: 20, flex: 1 },
+
+  // Inline Seva Calendar Styles
+  inlineCalBox: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 16, marginTop: 8, marginBottom: 4,
+    borderWidth: 1, borderColor: '#E8D5BE', gap: 10,
+  },
+  inlineCalHeader: { color: '#8B5A00', fontSize: 14, fontWeight: '800' },
+  inlineMonthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  inlineNavBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF0D9', alignItems: 'center', justifyContent: 'center' },
+  inlineMonthLabel: { color: '#2B231B', fontSize: 14, fontWeight: '800' },
+  inlineWeekRow: { flexDirection: 'row' },
+  inlineWeekDay: { flex: 1, textAlign: 'center', color: '#9E9080', fontSize: 11, fontWeight: '700' },
+  inlineGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  inlineCell: { width: `${100 / 7}%`, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  inlineCellSelected: { backgroundColor: '#B97512' },
+  inlineCellPast: { opacity: 0.35 },
+  inlineCellText: { color: '#2B231B', fontSize: 13, fontWeight: '600' },
+  inlineCellTextSelected: { color: '#fff', fontWeight: '900' },
+  inlineCellTextPast: { color: '#B9B1A9' },
+  inlineDot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
+  inlineLegendRow: { flexDirection: 'row', gap: 14, justifyContent: 'center', marginTop: 4 },
+  inlineLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  inlineLegendDot: { width: 7, height: 7, borderRadius: 3.5 },
+  inlineLegendText: { color: '#9E9080', fontSize: 10, fontWeight: '600' },
 })
 
