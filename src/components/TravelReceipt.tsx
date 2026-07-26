@@ -29,6 +29,14 @@ export type TravelReceiptData = {
   additionalSevaType?: string | null
   additionalSevaDate?: string | null
   additionalSevaAmount?: number | null
+  linkedSeva?: {
+    id: string
+    bookingReference: string
+    sevaType: string
+    sevaDate: string
+    totalAmount: number
+    status: string
+  } | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,19 +186,19 @@ export default function TravelReceipt({ data }: { data: TravelReceiptData }) {
           <ReceiptRow label="Accommodation" value={data.roomType} />
         ) : null}
 
-        {data.additionalSevaType && data.additionalSevaType !== 'none' ? (
+        {((data.additionalSevaType && data.additionalSevaType !== 'none') || data.linkedSeva) ? (
           <>
             <View style={styles.divider} />
             <ReceiptRow
-              label="Additional Service"
-              value={data.additionalSevaType === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'}
+              label="Linked Seva"
+              value={data.linkedSeva?.bookingReference ?? (data.additionalSevaType === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking')}
               highlight
             />
-            {data.additionalSevaDate ? (
-              <ReceiptRow label="Seva Date" value={formatDate(data.additionalSevaDate)} />
+            {data.additionalSevaDate || data.linkedSeva?.sevaDate ? (
+              <ReceiptRow label="Seva Date" value={formatDate(data.linkedSeva?.sevaDate ?? data.additionalSevaDate)} />
             ) : null}
-            {data.additionalSevaAmount ? (
-              <ReceiptRow label="Seva Charge" value={formatAmount(data.additionalSevaAmount)} />
+            {data.additionalSevaAmount || data.linkedSeva?.totalAmount ? (
+              <ReceiptRow label="Seva Amount" value={formatAmount(data.linkedSeva?.totalAmount ?? data.additionalSevaAmount ?? 0)} />
             ) : null}
           </>
         ) : null}
@@ -198,11 +206,6 @@ export default function TravelReceipt({ data }: { data: TravelReceiptData }) {
         <View style={styles.divider} />
         <ReceiptRow label="Total Amount" value={formatAmount(data.totalAmount)} highlight />
         <ReceiptRow label="Payment Method" value="Razorpay / Online" />
-
-        <View style={styles.divider} />
-
-        {/* ── QR VERIFICATION ── */}
-        <ReceiptQRVerification reference={data.bookingReference} bookingId={data.bookingId} />
       </View>
 
       {/* ── SECOND CUT LINE ── */}

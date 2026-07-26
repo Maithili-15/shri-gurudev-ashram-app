@@ -11,10 +11,18 @@ export type NotificationItem = {
 }
 
 export const getNotifications = async (): Promise<NotificationItem[]> => {
-  const { data } = await api.get('/api/notifications')
-  return data.notifications ?? []
+  try {
+    const { data } = await api.get('/api/notifications')
+    return data.notifications ?? []
+  } catch {
+    return []
+  }
 }
 
 export const markNotificationAsRead = async (id: string): Promise<void> => {
-  await api.put(`/api/notifications/${id}/read`)
+  try {
+    await api.put(`/api/notifications/${id}/read`)
+  } catch (e) {
+    console.warn('Failed to mark notification as read', e)
+  }
 }

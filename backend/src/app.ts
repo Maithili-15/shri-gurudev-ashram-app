@@ -130,6 +130,8 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   }
 
   response.status(status).json({
+    success: false,
+    message,
     error: message,
   })
 })

@@ -215,21 +215,9 @@ export default function SevaReceipt({ data }: SevaReceiptProps) {
         ) : null}
 
         <View style={styles.divider} />
-
         <ReceiptRow label="Donation Amount" value={formatAmount(data.amount)} highlight />
         <ReceiptRow label="Payment Method" value={data.paymentMethod} />
         <ReceiptRow label="Reference No." value={data.referenceNumber} />
-
-
-        <View style={styles.divider} />
-
-        {/* ── VOLUNTEER SCAN QR ── */}
-        <ReceiptQRVerification
-          receiptNo={data.receiptNumber}
-          trxId={data.transactionId}
-          type={data.sevaType}
-          amount={data.amount}
-        />
       </View>
 
       {/* ── SECOND CUT LINE ── */}

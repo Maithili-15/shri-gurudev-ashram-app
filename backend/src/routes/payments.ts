@@ -2,8 +2,10 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
+import { createNotification } from '../services/notifications'
 import { razorpay, razorpayKeySecret } from '../services/razorpay'
 import { supabaseAdmin } from '../services/supabaseAdmin'
+import { logError, logInfo } from '../utils/logger'
 
 export const paymentsRouter = Router()
 
@@ -25,6 +27,8 @@ paymentsRouter.post('/create-order', requireAuth, async (request, response, next
     if (!bookingId || typeof bookingId !== 'string' || !bookingId.trim()) {
       throw new HttpError(400, 'bookingId is required')
     }
+
+    logInfo('Payment', `Creating Travel Razorpay order for booking ${bookingId}`, { bookingId })
 
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
     if (!uuidRegex.test(bookingId)) {
@@ -71,8 +75,7 @@ paymentsRouter.post('/create-order', requireAuth, async (request, response, next
     }
 
     if (existingPayment?.status === 'created' && existingPayment.razorpay_order_id) {
-      // If amount has changed due to some reason (e.g., fee change), we technically should recreate the order, 
-      // but assuming fixed 2% fee, it matches.
+      logInfo('Payment', `Returning existing order ${existingPayment.razorpay_order_id} for booking ${bookingId}`)
       response.json({
         order: {
           id: existingPayment.razorpay_order_id,
@@ -92,6 +95,8 @@ paymentsRouter.post('/create-order', requireAuth, async (request, response, next
         bookingId,
       },
     })
+
+    logInfo('Payment', `Travel Razorpay Order Created: ${order.id}`, { orderId: order.id, amount: order.amount })
 
     const paymentPayload = {
       booking_id: bookingId,
@@ -114,6 +119,7 @@ paymentsRouter.post('/create-order', requireAuth, async (request, response, next
 
     response.json({ order, booking })
   } catch (error) {
+    logError('Payment', 'Failed to create Travel Razorpay order', error)
     next(error)
   }
 })
@@ -151,7 +157,8 @@ paymentsRouter.post('/verify', requireAuth, async (request, response, next) => {
     assertBookingOwner(booking.user_id, (request as AuthenticatedRequest).userId)
 
     if (booking.status === 'paid') {
-      throw new HttpError(409, 'Booking is already paid')
+      response.json({ success: true, message: 'Booking is already paid' })
+      return
     }
 
     const { data: existingPayment, error: existingPaymentError } = await supabaseAdmin
@@ -169,7 +176,8 @@ paymentsRouter.post('/verify', requireAuth, async (request, response, next) => {
     }
 
     if (existingPayment.status === 'captured') {
-      throw new HttpError(409, 'Booking is already paid')
+      response.json({ success: true, message: 'Booking is already paid' })
+      return
     }
 
     const { data: duplicatePayment, error: duplicateError } = await supabaseAdmin
@@ -359,8 +367,8 @@ async function loadPackage(packageId: string) {
 }
 
 
-function assertBookingOwner(bookingUserId: string, requestUserId: string) {
-  if (bookingUserId !== requestUserId) {
+function assertBookingOwner(bookingUserId: string, requestUserId: string | undefined) {
+  if (!requestUserId || bookingUserId !== requestUserId) {
     throw new HttpError(403, 'Booking does not belong to the authenticated user')
   }
 }
@@ -386,14 +394,47 @@ async function captureBookingPayment(input: {
     throw new HttpError(500, error.message)
   }
 
-  // Also update any linked seva_bookings for additional spiritual service
+  // Also update or create linked seva_bookings for additional spiritual service
   try {
-    const { data: booking } = await supabaseAdmin.from('bookings').select('booking_reference').eq('id', input.bookingId).maybeSingle()
+    const { data: booking } = await supabaseAdmin.from('bookings').select('*').eq('id', input.bookingId).maybeSingle()
+    if (booking?.user_id) {
+      await createNotification(booking.user_id, 'Payment Successful', `Your payment for Yatra booking reference ${booking.booking_reference} was successful. Jai Shri Gurudev!`)
+    }
     if (booking?.booking_reference) {
-      await supabaseAdmin
+      const { data: existingSeva } = await supabaseAdmin
         .from('seva_bookings')
-        .update({ status: 'paid', razorpay_order_id: input.razorpayOrderId })
+        .select('id')
         .eq('notes', `Additional Seva with Yatra Booking ${booking.booking_reference}`)
+        .maybeSingle()
+
+      if (existingSeva) {
+        await supabaseAdmin
+          .from('seva_bookings')
+          .update({
+            status: 'paid',
+            travel_booking_id: booking.id,
+            razorpay_order_id: input.razorpayOrderId,
+            razorpay_payment_id: input.razorpayPaymentId,
+          })
+          .eq('id', existingSeva.id)
+      } else if (booking.additional_seva_type) {
+        await supabaseAdmin
+          .from('seva_bookings')
+          .insert({
+            user_id: booking.user_id,
+            travel_booking_id: booking.id,
+            booking_reference: `SEV-${booking.booking_reference.replace(/^YAT-/, '')}`,
+            seva_type: booking.additional_seva_type,
+            seva_date: booking.additional_seva_date || new Date().toISOString().split('T')[0],
+            full_name: booking.full_name || 'Yatra Devotee',
+            phone_number: booking.phone_number || '',
+            total_amount: booking.additional_seva_amount || 0,
+            status: 'paid',
+            notes: `Additional Seva with Yatra Booking ${booking.booking_reference}`,
+            razorpay_order_id: input.razorpayOrderId,
+            razorpay_payment_id: input.razorpayPaymentId,
+          })
+      }
     }
   } catch (e) {
     console.error('Failed to sync linked seva_bookings status:', e)

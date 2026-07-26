@@ -11,6 +11,10 @@ type BookingApiRow = {
   user_id: string;
   traveler_count: number;
   special_notes: string | null;
+  base_amount?: number | null;
+  transport_amount?: number | null;
+  room_amount?: number | null;
+  additional_seva_amount?: number | null;
   total_amount: number;
   status: string;
   created_at?: string;
@@ -25,7 +29,8 @@ type BookingApiRow = {
   room_type?: string | null;
   additional_seva_type?: string | null;
   additional_seva_date?: string | null;
-  additional_seva_amount?: number | null;
+  linked_seva?: any;
+  linkedSeva?: any;
 };
 type PackageSelection = Pick<Database["public"]["Tables"]["travel_packages"]["Row"], "title" | "start_date" | "end_date"> | null;
 type BookingHistoryRow = BookingApiRow & {
@@ -48,6 +53,7 @@ function mapBookingStatus(status: string): BookingStatus {
 }
 
 function mapBookingRow(row: BookingApiRow, options?: { packageTitle?: string; travelStartDate?: string | null; travelEndDate?: string | null }): Booking {
+  const linked = row.linkedSeva ?? row.linked_seva;
   return {
     id: row.id,
     bookingReference: row.booking_reference,
@@ -58,6 +64,10 @@ function mapBookingRow(row: BookingApiRow, options?: { packageTitle?: string; tr
     userId: row.user_id,
     travelerCount: row.traveler_count,
     specialNotes: row.special_notes,
+    baseAmount: row.base_amount ?? undefined,
+    transportAmount: row.transport_amount ?? undefined,
+    roomAmount: row.room_amount ?? undefined,
+    additionalSevaAmount: row.additional_seva_amount ?? undefined,
     totalAmount: row.total_amount,
     status: mapBookingStatus(row.status),
     createdAt: row.created_at,
@@ -71,7 +81,15 @@ function mapBookingRow(row: BookingApiRow, options?: { packageTitle?: string; tr
     roomType: row.room_type ?? undefined,
     additionalSevaType: row.additional_seva_type ?? undefined,
     additionalSevaDate: row.additional_seva_date ?? undefined,
-    additionalSevaAmount: row.additional_seva_amount ?? undefined,
+    linkedSeva: linked ? {
+      id: linked.id,
+      bookingReference: linked.booking_reference ?? linked.bookingReference,
+      travelBookingId: linked.travel_booking_id ?? linked.travelBookingId ?? row.id,
+      sevaType: linked.seva_type ?? linked.sevaType,
+      sevaDate: linked.seva_date ?? linked.sevaDate,
+      totalAmount: linked.total_amount ?? linked.totalAmount,
+      status: linked.status,
+    } : null,
   };
 }
 

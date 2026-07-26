@@ -45,6 +45,7 @@ export default function SuccessRoute() {
         additionalSevaType: booking.additionalSevaType,
         additionalSevaDate: booking.additionalSevaDate,
         additionalSevaAmount: booking.additionalSevaAmount,
+        linkedSeva: booking.linkedSeva,
       }
     : null
 

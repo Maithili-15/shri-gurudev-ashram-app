@@ -55,17 +55,34 @@ export type VerificationStatus =
   | "submitted"
   | "verified"
   | "rejected";
+export type IdentityType = "aadhaar" | "pan";
+
 export type AuthUser = {
   id: string;
   fullName: string;
   email: string | null;
   phone: string;
+  whatsappNumber?: string | null;
+  dob?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
   role: string;
   profileImageUrl: string | null;
+  identityType?: IdentityType | null;
   verificationStatus: VerificationStatus;
   aadhaarNumber: string | null;
   aadhaarImagePath: string | null;
+  aadhaarBackImagePath?: string | null;
   selfieImagePath: string | null;
+  panNumber?: string | null;
+  panImagePath?: string | null;
+  identityNumberMasked?: string | null;
+  reviewNotes?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
   createdAt?: string;
   deletedAt: string | null;
 };
@@ -75,13 +92,28 @@ function mapUser(row: any): AuthUser {
     id: row.id,
     fullName: row.full_name ?? "",
     email: row.email ?? null,
-    phone: row.phone ?? "",
+    phone: row.phone ?? row.phone_number ?? "",
+    whatsappNumber: row.whatsapp_number ?? row.phone ?? row.phone_number ?? null,
+    dob: row.dob ?? null,
+    gender: row.gender ?? null,
+    address: row.address ?? null,
+    emergencyContactName: row.emergency_contact_name ?? null,
+    emergencyContactPhone: row.emergency_contact_phone ?? null,
+    emergencyContactRelation: row.emergency_contact_relation ?? null,
     role: row.role ?? "user",
     profileImageUrl: row.profile_image_url ?? null,
+    identityType: row.identity_type ?? null,
     verificationStatus: row.verification_status ?? "not_submitted",
     aadhaarNumber: row.aadhaar_number ?? null,
     aadhaarImagePath: row.aadhaar_image_path ?? null,
+    aadhaarBackImagePath: row.aadhaar_back_image_path ?? null,
     selfieImagePath: row.selfie_image_path ?? null,
+    panNumber: row.pan_number ?? null,
+    panImagePath: row.pan_image_path ?? null,
+    identityNumberMasked: row.identity_number_masked ?? null,
+    reviewNotes: row.review_notes ?? null,
+    reviewedBy: row.reviewed_by ?? null,
+    reviewedAt: row.reviewed_at ?? null,
     createdAt: row.created_at,
     deletedAt: row.deleted_at ?? null,
   };

@@ -17,6 +17,16 @@ export type TravelPackage = {
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'payment_pending' | 'paid';
 
+export type LinkedSeva = {
+  id: string;
+  bookingReference: string;
+  travelBookingId?: string | null;
+  sevaType: string;
+  sevaDate: string;
+  totalAmount: number;
+  status: string;
+};
+
 export type Booking = {
   id: string;
   bookingReference: string;
@@ -27,6 +37,10 @@ export type Booking = {
   userId: string;
   travelerCount: number;
   specialNotes: string | null;
+  baseAmount?: number;
+  transportAmount?: number;
+  roomAmount?: number;
+  additionalSevaAmount?: number;
   totalAmount: number;
   status: BookingStatus;
   createdAt?: string;
@@ -41,7 +55,7 @@ export type Booking = {
   roomType?: string;
   additionalSevaType?: string;
   additionalSevaDate?: string;
-  additionalSevaAmount?: number;
+  linkedSeva?: LinkedSeva | null;
 };
 
 export type CreateBookingPassengerInput = {

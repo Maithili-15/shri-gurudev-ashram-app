@@ -29,6 +29,7 @@ import { Image } from 'expo-image'
 
 import { createDonation, createDonationOrder, getDonationHeads, getRecentDonations, getTopDonors } from '../../services/donation'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useTabBarBottomPadding } from '../../hooks/useTabBarBottomPadding'
 
 /* ─── Design tokens ─── */
 const C = {
@@ -599,15 +600,19 @@ export default function DonationScreen() {
 
       <Stepper currentStep={step} />
 
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: useTabBarBottomPadding(90) }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* ─── Sticky Footer Actions ─── */}
-      <Reanimated.View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <Reanimated.View style={[styles.stickyFooter, { bottom: useTabBarBottomPadding(12) }]}>
         {step > 1 && (
           <Pressable style={styles.outlineBtn} onPress={handleBack}>
             <Text style={styles.outlineBtnText}>Back</Text>
@@ -720,9 +725,9 @@ const styles = StyleSheet.create({
   totalBannerLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
   totalBannerAmount: { color: '#fff', fontSize: 24, fontWeight: '900' },
 
-  stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: C.cardBorder, paddingHorizontal: 18, paddingTop: 16, flexDirection: 'row', gap: 12 },
-  primaryBtn: { flex: 1, backgroundColor: C.orange, borderRadius: 8, height: 50, alignItems: 'center', justifyContent: 'center' },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  outlineBtn: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.orange, borderRadius: 8, height: 50, alignItems: 'center', justifyContent: 'center' },
-  outlineBtnText: { color: C.orange, fontSize: 16, fontWeight: '800' },
+  stickyFooter: { position: 'absolute', left: 16, right: 16, backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: C.cardBorder, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  primaryBtn: { flex: 1, backgroundColor: C.orange, borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center' },
+  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  outlineBtn: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.orange, borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center' },
+  outlineBtnText: { color: C.orange, fontSize: 15, fontWeight: '800' },
 })
