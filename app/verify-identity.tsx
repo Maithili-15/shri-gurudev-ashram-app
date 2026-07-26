@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -183,7 +184,7 @@ export default function VerifyIdentityRoute() {
       <SafeAreaView style={styles.container}>
         <ScrollView
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshStatus()} />}
-          contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+          contentContainerStyle={[styles.content, { paddingTop: 16 }]}
           showsVerticalScrollIndicator={false}
         >
           <Header onBack={() => router.back()} />
@@ -207,7 +208,7 @@ export default function VerifyIdentityRoute() {
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshStatus()} />}
-          contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+          contentContainerStyle={[styles.content, { paddingTop: 16 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

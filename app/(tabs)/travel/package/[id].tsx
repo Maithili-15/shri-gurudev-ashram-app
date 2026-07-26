@@ -37,7 +37,7 @@ export default function PackageDetailsRoute() {
           <MaterialIcons name="travel-explore" size={38} color="#8B5A00" />
           <Text style={styles.centerTitle}>Package unavailable</Text>
           <Text style={styles.centerText}>This yatra is no longer active.</Text>
-          <AppButton title="Back to Travel" onPress={() => router.replace('/(tabs)/travel' as never)} />
+          <AppButton title="Back to Yatra Booking" onPress={() => router.replace('/(tabs)/travel' as never)} />
         </View>
       </SafeAreaView>
     )
@@ -47,7 +47,7 @@ export default function PackageDetailsRoute() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 24) + 100 }]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingTop: 12, paddingBottom: Math.max(insets.bottom, 24) + 100 }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.iconButton}>
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />

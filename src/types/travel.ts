@@ -39,6 +39,9 @@ export type Booking = {
   transportType?: string;
   busType?: string;
   roomType?: string;
+  additionalSevaType?: string;
+  additionalSevaDate?: string;
+  additionalSevaAmount?: number;
 };
 
 export type CreateBookingPassengerInput = {
@@ -60,6 +63,8 @@ export type CreateBookingInput = {
   busType?: string;
   roomType: string;
   passengers: CreateBookingPassengerInput[];
+  additionalSevaType?: string;
+  additionalSevaDate?: string;
 };
 
 export type BookingRecord = {

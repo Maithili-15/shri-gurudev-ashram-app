@@ -7,7 +7,6 @@
     "scheme": "shri-gurudev-ashram-app",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-
     "experiments": {
       "typedRoutes": true
     },
@@ -54,7 +53,8 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "extra": {
       "router": {},

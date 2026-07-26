@@ -5,6 +5,17 @@ import { useSevaStore } from '../store/useSevaStore';
 import api from '../api/axiosClient';
 import donationApi from '../api/donationAxiosClient';
 
+// Helper to replace Promise.allSettled which is not available in all React Native JS engines
+async function allSettled<T>(promises: Promise<T>[]) {
+  return Promise.all(
+    promises.map((p) =>
+      p
+        .then((value) => ({ status: 'fulfilled' as const, value }))
+        .catch((reason) => ({ status: 'rejected' as const, reason }))
+    )
+  );
+}
+
 export type DateAvailabilityInfo = {
   booked: number;
   capacity: number;
@@ -15,8 +26,8 @@ export type DateAvailabilityInfo = {
 // ─── Fetch Dynamic Seva Pricing ─────────────────────────────────────────────
 export async function fetchSevaPricing(): Promise<Record<SevaType, number>> {
   try {
-    const [annadanRes, yajmanRes] = await Promise.allSettled([
-      donationApi.get('/api/annadan/pricing'),
+    const [annadanRes, yajmanRes] = await allSettled([
+      api.get('/api/annadan/pricing'),
       api.get('/api/seva/pricing'),
     ]);
 
@@ -45,7 +56,7 @@ export async function fetchSevaMonthlyAvailability(
   month: string,
 ): Promise<Record<string, DateAvailabilityInfo>> {
   if (type === 'annadan') {
-    const { data } = await donationApi.get(`/api/annadan/availability?month=${month}`);
+    const { data } = await api.get(`/api/annadan/availability?month=${month}`);
     return data.availability || {};
   }
   const { data } = await api.get(`/api/seva/availability?type=${type}&month=${month}`);
@@ -57,7 +68,7 @@ export async function createSevaBooking(
   input: CreateSevaBookingInput,
 ): Promise<SevaBooking> {
   if (input.sevaType === 'annadan') {
-    const { data } = await donationApi.post('/api/annadan', input);
+    const { data } = await api.post('/api/annadan', input);
     return data.data;
   }
   const { data } = await api.post('/api/seva', input);
@@ -71,11 +82,11 @@ export async function createSevaOrder(
   sevaType?: string,
 ): Promise<{ order: any; booking: SevaBooking }> {
   if (sevaType === 'annadan') {
-    const { data } = await donationApi.post('/api/annadan/create-order', { bookingId });
+    const { data } = await api.post('/api/annadan/create-order', { bookingId });
     return data;
   }
   try {
-    const { data } = await donationApi.post('/api/annadan/create-order', { bookingId });
+    const { data } = await api.post('/api/annadan/create-order', { bookingId });
     return data;
   } catch {
     const { data } = await api.post('/api/payments/create-seva-order', { bookingId });
@@ -91,11 +102,11 @@ export async function verifySevaPayment(paymentData: {
   sevaType?: string;
 }): Promise<{ success: boolean }> {
   if (paymentData.sevaType === 'annadan') {
-    const { data } = await donationApi.post('/api/annadan/verify-payment', paymentData);
+    const { data } = await api.post('/api/annadan/verify-payment', paymentData);
     return data;
   }
   try {
-    const { data } = await donationApi.post('/api/annadan/verify-payment', paymentData);
+    const { data } = await api.post('/api/annadan/verify-payment', paymentData);
     return data;
   } catch {
     const { data } = await api.post('/api/payments/verify-seva', paymentData);
@@ -105,8 +116,8 @@ export async function verifySevaPayment(paymentData: {
 
 // ─── Upcoming Sevas for the Home feed (Merging Nitya Annadan + Yajman) ───────
 export async function fetchUpcomingSevas(): Promise<UpcomingSeva[]> {
-  const [annadanRes, yajmanRes] = await Promise.allSettled([
-    donationApi.get('/api/annadan/upcoming'),
+  const [annadanRes, yajmanRes] = await allSettled([
+    api.get('/api/annadan/upcoming'),
     api.get('/api/seva/upcoming'),
   ]);
 
@@ -135,8 +146,8 @@ export async function fetchUpcomingSevas(): Promise<UpcomingSeva[]> {
 
 // ─── Seva History (Merging Nitya Annadan + Yajman Only) ──────────────────────
 export async function fetchSevaHistory(): Promise<SevaBooking[]> {
-  const [annadanRes, yajmanRes] = await Promise.allSettled([
-    donationApi.get('/api/annadan/history'),
+  const [annadanRes, yajmanRes] = await allSettled([
+    api.get('/api/annadan/history'),
     api.get('/api/seva/history'),
   ]);
 
@@ -159,7 +170,7 @@ export async function fetchSevaHistory(): Promise<SevaBooking[]> {
 export async function checkAnnadanAvailability(
   date: string,
 ): Promise<{ available: boolean; reason?: string }> {
-  const { data } = await donationApi.get(`/api/annadan/availability?date=${date}`);
+  const { data } = await api.get(`/api/annadan/availability?date=${date}`);
   return data;
 }
 

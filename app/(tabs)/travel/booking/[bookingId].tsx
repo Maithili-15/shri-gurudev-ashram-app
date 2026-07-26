@@ -85,7 +85,7 @@ export default function BookingDetailsRoute() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={[styles.loadingWrap, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={[styles.loadingWrap, { paddingTop: 16 }]}>
           <ActivityIndicator color="#8B5A00" />
         </View>
       </SafeAreaView>
@@ -95,7 +95,7 @@ export default function BookingDetailsRoute() {
   if (!booking) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={[styles.emptyWrap, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={[styles.emptyWrap, { paddingTop: 16 }]}>
           <MaterialIcons name="error-outline" size={34} color="#8B5A00" />
           <Text style={styles.emptyTitle}>Booking not found</Text>
           <Text style={styles.emptyText}>{errorMessage || 'We could not load this booking.'}</Text>
@@ -153,7 +153,7 @@ export default function BookingDetailsRoute() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadBooking(true)} />}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>

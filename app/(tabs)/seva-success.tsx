@@ -7,8 +7,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import SevaReceipt from '../../src/components/SevaReceipt'
 import type { SevaType } from '../../src/constants/seva'
 import { SEVA_LABELS, generateTransactionId } from '../../src/constants/seva'
-import type { SevaReceiptData } from '../../src/types/seva'
+import type { SevaReceiptData, AnnadanBookingPurpose } from '../../src/types/seva'
 import { useSevaStore } from '../../src/store/useSevaStore'
+import { PURPOSE_LABELS } from '../../src/features/annadan/constants'
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UNIVERSAL SEVA SUCCESS SCREEN
@@ -27,16 +29,40 @@ export default function SevaSuccessRoute() {
   const insets = useSafeAreaInsets()
   const addToHistory = useSevaStore((s) => s.addToHistory)
 
-  const { sevaType, reference, transactionId, devotee, phone, sevaDate, amount } =
-    useLocalSearchParams<{
-      sevaType: string
-      reference: string
-      transactionId: string
-      devotee: string
-      phone: string
-      sevaDate: string
-      amount: string
-    }>()
+  const {
+    sevaType,
+    reference,
+    transactionId,
+    devotee,
+    phone,
+    sevaDate,
+    amount,
+    // New fields
+    bookingPurpose,
+    beneficiaryName,
+    identityType,
+    identityNumberMasked,
+    isRecurring,
+    recurringPeriod,
+    sponsorName,
+    sponsorPhone,
+  } = useLocalSearchParams<{
+    sevaType: string
+    reference: string
+    transactionId: string
+    devotee: string
+    phone: string
+    sevaDate: string
+    amount: string
+    bookingPurpose: string
+    beneficiaryName: string
+    identityType: string
+    identityNumberMasked: string
+    isRecurring: string
+    recurringPeriod: string
+    sponsorName: string
+    sponsorPhone: string
+  }>()
 
   const type = (sevaType as SevaType) ?? 'annadan'
   const label = SEVA_LABELS[type]
@@ -55,6 +81,15 @@ export default function SevaSuccessRoute() {
     paymentMethod: 'UPI / Online',
     status: 'paid',
     referenceNumber: reference ?? '—',
+    // New fields
+    bookingPurpose: bookingPurpose || undefined,
+    beneficiaryName: beneficiaryName || undefined,
+    sponsorName: sponsorName || undefined,
+    sponsorPhone: sponsorPhone || undefined,
+    identityType: identityType || undefined,
+    identityNumberMasked: identityNumberMasked || undefined,
+    isRecurring: isRecurring === 'true',
+    recurringPeriod: recurringPeriod || undefined,
   }
 
   // Add to sevaHistory on mount so My Sevas screen can display it
@@ -70,33 +105,58 @@ export default function SevaSuccessRoute() {
       totalAmount: parsedAmount,
       status: 'paid',
       createdAt: new Date().toISOString(),
+      // New fields
+      bookingPurpose: (bookingPurpose as any) || undefined,
+      beneficiaryName: beneficiaryName || undefined,
+      sponsorName: sponsorName || undefined,
+      sponsorPhone: sponsorPhone || undefined,
+      identityType: (identityType as any) || undefined,
+      identityNumberMasked: identityNumberMasked || undefined,
+      isRecurring: isRecurring === 'true',
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shareReceipt = async () => {
     try {
+      let message = `🙏 ${label.title} Receipt\n\n`
+      if (bookingPurpose) {
+        const purposeLabel = PURPOSE_LABELS[bookingPurpose as AnnadanBookingPurpose] || bookingPurpose
+        message += `Purpose: ${purposeLabel}\n`
+      }
+      if (beneficiaryName) {
+        message += `Beneficiary: ${beneficiaryName}\n`
+      }
+      message += `Sponsor: ${sponsorName || devotee}\n`
+      message += `Phone: ${sponsorPhone || phone}\n`
+      message += `Seva Date: ${formatDateString(sevaDate)}\n`
+      if (isRecurring === 'true' && recurringPeriod) {
+        message += `Annual Booking Period: ${recurringPeriod}\n`
+      }
+      if (identityType && identityNumberMasked) {
+        const idLabel = identityType === 'aadhaar' ? 'Aadhaar' : 'PAN'
+        message += `${idLabel}: ${identityNumberMasked}\n`
+      }
+      message += `Amount: ₹${parsedAmount.toLocaleString('en-IN')}\n`
+      message += `Receipt No: ${reference}\n`
+      message += `Transaction ID: ${finalTxnId}\n\n`
+      message += `Issued by Shri Gurudev Ashram\n`
+      message += `Haridwar Road, Rishikesh, Uttarakhand — 249201\n\n`
+      message += `Jai Shri Gurudev! 🙏`
+
       await Share.share({
         title: `${label.title} Receipt — Shri Gurudev Ashram`,
-        message:
-          `🙏 ${label.title} Receipt\n\n` +
-          `Devotee: ${devotee}\n` +
-          `Seva Date: ${formatDateString(sevaDate)}\n` +
-          `Amount: ₹${parsedAmount.toLocaleString('en-IN')}\n` +
-          `Receipt No: ${reference}\n` +
-          `Transaction ID: ${finalTxnId}\n\n` +
-          `Issued by Shri Gurudev Ashram\n` +
-          `Haridwar Road, Rishikesh, Uttarakhand — 249201\n\n` +
-          `Jai Shri Gurudev! 🙏`,
+        message,
       })
     } catch {
       // user cancelled share — no-op
     }
   }
 
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Success icon */}

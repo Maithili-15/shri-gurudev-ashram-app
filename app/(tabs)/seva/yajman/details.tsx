@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
 
@@ -29,6 +29,8 @@ function formatDateString(isoStr?: string): string {
 
 export default function YajmanDetailsRoute() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ type?: string }>()
+  const isAartiMode = params.type === 'aarti'
   const insets = useSafeAreaInsets()
 
   const fullName = useSevaStore((s) => s.fullName)
@@ -49,7 +51,10 @@ export default function YajmanDetailsRoute() {
   const onContinue = () => {
     setTouched({ fullName: true, phoneNumber: true })
     if (!isValid) return
-    router.push('/(tabs)/seva/yajman/review' as never)
+    router.push({
+      pathname: '/(tabs)/seva/yajman/review',
+      params: { type: isAartiMode ? 'aarti' : 'yajman_pad' }
+    } as never)
   }
 
   return (
@@ -59,7 +64,7 @@ export default function YajmanDetailsRoute() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+          contentContainerStyle={[styles.content, { paddingTop: 16 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

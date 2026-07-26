@@ -82,7 +82,7 @@ export default function BookingHistoryRoute() {
   if (isLoading && bookings.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={[styles.loadingState, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={[styles.loadingState, { paddingTop: 16 }]}>
           <Header onBack={() => router.back()} />
           <View style={styles.loaderCard}>
             <ActivityIndicator size="large" color="#8B5A00" />
@@ -96,7 +96,7 @@ export default function BookingHistoryRoute() {
   if (errorMessage && bookings.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={[styles.content, { paddingTop: 16 }]}>
           <Header onBack={() => router.back()} />
           <View style={styles.errorState}>
             <MaterialIcons name="error-outline" size={30} color="#8B5A00" />
@@ -116,7 +116,7 @@ export default function BookingHistoryRoute() {
       <FlatList
         data={bookings}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         refreshing={isRefreshing}
         onRefresh={() => {
           void loadBookings(true)

@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
@@ -74,6 +74,13 @@ const YAJMAN_STEPS = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function YajmanCalendarRoute() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ type?: string }>()
+  const isAartiMode = params.type === 'aarti'
+
+  const sevaTitle = isAartiMode ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'
+  const sevaIcon = isAartiMode ? 'local-fire-department' : 'self-improvement'
+  const defaultPrice = isAartiMode ? 2100 : 5100
+
   const insets = useSafeAreaInsets()
   const setSevaType = useSevaStore((s) => s.setSevaType)
   const setSelectedDate = useSevaStore((s) => s.setSelectedDate)
@@ -91,10 +98,10 @@ export default function YajmanCalendarRoute() {
   const [loadingMonth, setLoadingMonth] = useState(false)
 
   useEffect(() => {
-    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(p.yajman) }).catch(() => {})
+    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(isAartiMode ? 2100 : p.yajman) }).catch(() => {})
     resetSeva()
     setSevaType('yajman')
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAartiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
@@ -147,7 +154,7 @@ export default function YajmanCalendarRoute() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -156,8 +163,8 @@ export default function YajmanCalendarRoute() {
             <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />
           </Pressable>
           <View>
-            <Text style={styles.kicker}>Yajman Booking</Text>
-            <Text style={styles.title}>Guruji Aarti Seva</Text>
+            <Text style={styles.kicker}>Spiritual Seva</Text>
+            <Text style={styles.title}>{sevaTitle}</Text>
           </View>
         </View>
 
@@ -170,15 +177,17 @@ export default function YajmanCalendarRoute() {
             style={styles.heroBanner}
           >
             <View style={styles.heroIconRing}>
-              <MaterialIcons name="local-fire-department" size={32} color="#B97512" />
+              <MaterialIcons name={sevaIcon as any} size={32} color="#B97512" />
             </View>
             <View style={styles.heroTextWrap}>
-              <Text style={styles.heroBannerTitle}>Become Today's Yajman</Text>
+              <Text style={styles.heroBannerTitle}>{isAartiMode ? 'Guruji Aarti Privilege' : 'Become Today\'s Yajman'}</Text>
               <Text style={styles.heroBannerBody}>
-                Receive the sacred privilege of performing Guruji's Aarti during the Katha. Only one Yajman is chosen per Katha.
+                {isAartiMode
+                  ? 'Receive the sacred privilege of performing Guruji\'s Aarti during the Katha and seeking divine grace.'
+                  : 'Receive the sacred privilege of performing Guruji\'s Aarti during the Katha as the principal devotee.'}
               </Text>
               <View style={styles.heroPricePill}>
-                <Text style={styles.heroPriceText}>₹{yajmanPrice.toLocaleString('en-IN')} · One Yajman Per Katha</Text>
+                <Text style={styles.heroPriceText}>₹{yajmanPrice.toLocaleString('en-IN')} · Reserved Booking</Text>
               </View>
             </View>
           </LinearGradient>
@@ -331,34 +340,28 @@ export default function YajmanCalendarRoute() {
           ) : null}
         </Animated.View>
 
-        {/* Become Yajman CTA */}
-        {selectedIso && availabilityMsg?.available ? (
-          <Animated.View entering={FadeInDown.duration(400)}>
-            <View style={styles.sponsorPreview}>
-              <MaterialIcons name="local-fire-department" size={18} color="#B97512" />
-              <Text style={styles.sponsorPreviewText}>
-                You will become the Yajman for the Katha on{' '}
-                <Text style={styles.sponsorPreviewDate}>{formattedSelected}</Text>
-              </Text>
-            </View>
-            <Pressable onPress={onContinue}>
-              <LinearGradient
-                colors={['#4A2E00', '#8B5A00', '#C4892B']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.ctaButton}
-              >
-                <Text style={styles.ctaText}>Become Today's Yajman →</Text>
-              </LinearGradient>
-            </Pressable>
-          </Animated.View>
-        ) : (
-          <Pressable disabled>
-            <LinearGradient colors={['#D5CFC8', '#D5CFC8']} style={styles.ctaButton}>
-              <Text style={styles.ctaText}>Select a Katha Date to Continue</Text>
+        {/* Continue Button */}
+        <Animated.View entering={FadeInDown.duration(400)}>
+          <Pressable
+            disabled={!selectedIso || availabilityMsg?.available === false}
+            onPress={() => {
+              setSelectedDate(selectedIso)
+              router.push({
+                pathname: '/(tabs)/seva/yajman/details',
+                params: { type: isAartiMode ? 'aarti' : 'yajman_pad' }
+              } as never)
+            }}
+          >
+            <LinearGradient
+              colors={(!selectedIso || availabilityMsg?.available === false) ? ['#D5CFC8', '#D5CFC8'] : ['#7B4B00', '#B97512', '#E0A31F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.ctaButton}
+            >
+              <Text style={styles.ctaText}>Continue →</Text>
             </LinearGradient>
           </Pressable>
-        )}
+        </Animated.View>
 
         {/* Spiritual note */}
         <View style={styles.quoteCard}>

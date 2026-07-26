@@ -36,6 +36,15 @@ export default function SevaPaymentRoute() {
     sevaDate,
     devotee,
     phone,
+    // ─── New fields for receipt ───────────────────────────────────────────
+    bookingPurpose,
+    beneficiaryName,
+    identityType,
+    identityNumberMasked,
+    isRecurring,
+    recurringPeriod,
+    sponsorName,
+    sponsorPhone,
   } = useLocalSearchParams<{
     sevaType: string
     sevaBookingId: string
@@ -45,6 +54,14 @@ export default function SevaPaymentRoute() {
     sevaDate: string
     devotee: string
     phone: string
+    bookingPurpose: string
+    beneficiaryName: string
+    identityType: string
+    identityNumberMasked: string
+    isRecurring: string
+    recurringPeriod: string
+    sponsorName: string
+    sponsorPhone: string
   }>()
 
   const [isPaying, setIsPaying] = React.useState(false)
@@ -109,9 +126,19 @@ export default function SevaPaymentRoute() {
           phone: phone ?? '',
           sevaDate: sevaDate ?? '',
           amount: String(displayAmount),
+          // Pass new fields
+          bookingPurpose: bookingPurpose ?? '',
+          beneficiaryName: beneficiaryName ?? '',
+          identityType: identityType ?? '',
+          identityNumberMasked: identityNumberMasked ?? '',
+          isRecurring: isRecurring ?? '',
+          recurringPeriod: recurringPeriod ?? '',
+          sponsorName: sponsorName ?? '',
+          sponsorPhone: sponsorPhone ?? '',
         },
       } as never)
     } catch (error) {
+
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -127,7 +154,7 @@ export default function SevaPaymentRoute() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}
+        contentContainerStyle={[styles.content, { paddingTop: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}

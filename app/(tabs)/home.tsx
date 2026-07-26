@@ -39,9 +39,8 @@ export type HomeServiceConfig = {
 }
 
 const ASHRAM_SERVICES_CONFIG: HomeServiceConfig[] = [
-  { id: 'travel', title: 'Book Travel', icon: 'flight', route: '/(tabs)/travel', enabled: true },
+  { id: 'travel', title: 'Yatra Booking', icon: 'directions-bus', route: '/(tabs)/travel', enabled: true },
   { id: 'annadan', title: 'Annadan', icon: 'restaurant', route: '/(tabs)/seva/annadan', enabled: true },
-  { id: 'yajman', title: 'Guruji Aarti Seva', icon: 'local-fire-department', route: '/(tabs)/seva/yajman', enabled: true },
   { id: 'donations', title: 'Donations', icon: 'volunteer-activism', route: '/donation', enabled: true },
   { id: 'activity', title: 'My Activity', icon: 'history', route: '/(tabs)/my-sevas', enabled: true },
   { id: 'collector', title: 'Collector Registration', icon: 'verified-user', route: '/collector-apply', enabled: true },
@@ -356,7 +355,7 @@ export default function HomeRoute() {
       <View style={styles.screen}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 12) + 6 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 12 + 6 }]}
         >
           <View style={styles.header}>
             <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.menuButton}>
@@ -448,11 +447,15 @@ export default function HomeRoute() {
           </View>
 
           {[
-            ['About Ashram', '/help-support'],
-            ['Activities & Yatra', '/(tabs)/travel'],
-            ['Announcements', '/(tabs)/notifications'],
-            ['Donate', '/donation'],
-            ['Contact Us', '/help-support'],
+            ['Home', '/(tabs)/home'],
+            ['Yatra Booking', '/(tabs)/travel'],
+            ['Guruji Aarti Seva', '/(tabs)/seva/yajman?type=aarti'],
+            ['Yajman Pad Booking', '/(tabs)/seva/yajman?type=yajman_pad'],
+            ['My Bookings', '/(tabs)/travel/booking-history'],
+            ['Donations', '/donation'],
+            ['Profile', '/(tabs)/profile'],
+            ['Contact', '/help-support'],
+            ['Help', '/help-support'],
           ].map(([label, href]) => (
             <TouchableOpacity
               key={label}

@@ -57,11 +57,15 @@ function statusLabel(status: SevaReceiptData['status']): string {
 }
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
-function ReceiptRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function ReceiptRow({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, highlight && styles.rowValueHighlight]}>{value}</Text>
+      {typeof value === 'string' ? (
+        <Text style={[styles.rowValue, highlight && styles.rowValueHighlight]}>{value}</Text>
+      ) : (
+        value
+      )}
     </View>
   )
 }
@@ -102,6 +106,14 @@ function ReceiptQRVerification({ receiptNo, trxId, type, amount }: { receiptNo: 
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+const SEVA_PURPOSE_LABELS: Record<string, string> = {
+  birthday: 'Birthday',
+  smruti: 'Smruti Pitrayartha',
+  pitrayartha: 'Smruti Pitrayartha',
+  smruti_pitrayartha: 'Smruti Pitrayartha',
+  general: 'General Annadan',
+}
+
 export default function SevaReceipt({ data }: SevaReceiptProps) {
   const label = SEVA_LABELS[data.sevaType]
   const color = statusColor(data.status)
@@ -128,7 +140,7 @@ export default function SevaReceipt({ data }: SevaReceiptProps) {
       {/* ── SEVA TYPE STRIP ── */}
       <View style={styles.sevaStrip}>
         <View style={[styles.sevaIconWrap, { backgroundColor: `${label.color}18` }]}>
-          <MaterialIcons name={label.icon as any} size={22} color={label.color} />
+          <MaterialIcons name={label.icon as keyof typeof MaterialIcons.glyphMap} size={22} color={label.color} />
         </View>
         <View style={styles.sevaStripText}>
           <Text style={styles.sevaStripLabel}>OFFICIAL RECEIPT</Text>
@@ -153,16 +165,61 @@ export default function SevaReceipt({ data }: SevaReceiptProps) {
         <ReceiptRow label="Transaction Date" value={formatDate(data.transactionDate)} />
         <ReceiptRow label="Seva Date" value={formatDate(data.sevaDate)} highlight />
 
+        {/* Conditional Redesign Fields: Purpose & Beneficiary */}
+        {data.bookingPurpose ? (
+          <ReceiptRow
+            label="Seva Purpose"
+            value={SEVA_PURPOSE_LABELS[data.bookingPurpose] || data.bookingPurpose}
+          />
+        ) : null}
+        {data.beneficiaryName ? (
+          <ReceiptRow label="Beneficiary" value={data.beneficiaryName} />
+        ) : null}
+
+        {/* Booking Duration & Period */}
+        {data.sevaType === 'annadan' ? (
+          <ReceiptRow 
+            label="Booking Duration" 
+            value={data.isRecurring ? 'Entire Year' : 'One-Time'} 
+          />
+        ) : null}
+
+        {data.isRecurring && data.recurringPeriod ? (
+          <ReceiptRow 
+            label="Booking Period" 
+            value={
+              data.recurringPeriod.includes(' — ') ? (
+                <View style={{ gap: 2, alignItems: 'flex-end' }}>
+                  <Text style={styles.rowValue}>{data.recurringPeriod.split(' — ')[0]}</Text>
+                  <Text style={{ fontSize: 11, color: '#B97512', fontWeight: 'bold', marginRight: 4 }}>to</Text>
+                  <Text style={styles.rowValue}>{data.recurringPeriod.split(' — ')[1]}</Text>
+                </View>
+              ) : (
+                data.recurringPeriod
+              )
+            } 
+          />
+        ) : null}
+
         <View style={styles.divider} />
 
-        <ReceiptRow label="Devotee Name" value={data.devotee} />
-        <ReceiptRow label="Mobile Number" value={data.phone} />
+        <ReceiptRow label="Sponsor Name" value={data.sponsorName || data.devotee} />
+        <ReceiptRow label="Mobile Number" value={data.sponsorPhone || data.phone} />
+
+        {/* Conditional Redesign Fields: Identity */}
+        {data.identityType && data.identityNumberMasked ? (
+          <ReceiptRow
+            label={data.identityType === 'aadhaar' ? 'Aadhaar Number' : 'PAN Number'}
+            value={data.identityNumberMasked}
+          />
+        ) : null}
 
         <View style={styles.divider} />
 
         <ReceiptRow label="Donation Amount" value={formatAmount(data.amount)} highlight />
         <ReceiptRow label="Payment Method" value={data.paymentMethod} />
         <ReceiptRow label="Reference No." value={data.referenceNumber} />
+
 
         <View style={styles.divider} />
 
