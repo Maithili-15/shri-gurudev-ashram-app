@@ -4,7 +4,27 @@ import { HttpError } from '../errors'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { normalizeFirebasePhone, verifyFirebaseIdToken } from '../services/firebaseAdmin'
 
-export type AuthenticatedRequest = Request & { userId: string }
+export type AuthenticatedRequest = Request & { userId?: string }
+
+export async function optionalAuth(request: Request, _response: Response, next: NextFunction) {
+  try {
+    const token = request.headers.authorization?.replace(/^Bearer\s+/i, '')
+    if (!token) return next()
+
+    const firebaseUser = await verifyFirebaseIdToken(token)
+    if (!firebaseUser.phone_number) return next()
+
+    const phone = normalizeFirebasePhone(firebaseUser.phone_number)
+    const profile = await supabaseAdmin.from('users').select('id, deleted_at').eq('phone', phone).is('deleted_at', null).maybeSingle()
+
+    if (profile.data) {
+      ;(request as AuthenticatedRequest).userId = profile.data.id
+    }
+  } catch {
+    // Optional authentication intentionally falls back to guest
+  }
+  next()
+}
 
 export async function requireAuth(request: Request, _response: Response, next: NextFunction) {
   try {
@@ -13,9 +33,9 @@ export async function requireAuth(request: Request, _response: Response, next: N
 
     const firebaseUser = await verifyFirebaseIdToken(token)
     if (!firebaseUser.phone_number) throw new HttpError(401, 'Firebase token has no phone number')
-    
+
     const phone = normalizeFirebasePhone(firebaseUser.phone_number)
-    
+
     const profile = await supabaseAdmin.from('users').select('id, deleted_at').eq('phone', phone).is('deleted_at', null).maybeSingle()
     if (profile.error) throw new HttpError(500, profile.error.message)
 

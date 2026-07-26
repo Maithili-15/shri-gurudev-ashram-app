@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
+import { createNotification } from '../services/notifications'
 import { supabaseAdmin } from '../services/supabaseAdmin'
+import { logError, logInfo } from '../utils/logger'
 
 export const bookingsRouter = Router()
 
@@ -175,6 +177,14 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
 
     const totalAmount = (packageUnitPrice * travelerCount) + additionalSevaPrice
 
+    logInfo('Travel', `Calculated pricing breakdown for package ${packageId}`, {
+      baseAmount: baseUnitPrice * travelerCount,
+      transportAmount: transportAddon * travelerCount,
+      roomAmount: roomAddon * travelerCount,
+      additionalSevaAmount: additionalSevaPrice,
+      totalAmount,
+    })
+
     const bookingReference = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
     const authRequest = request as AuthenticatedRequest
 
@@ -216,7 +226,6 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         user_id: authRequest.userId,
         package_id: packageId,
         status: 'payment_pending',
-        total_amount: totalAmount,
         traveler_count: travelerCount,
         special_notes: specialNotes?.trim() || null,
         booking_reference: bookingReference,
@@ -228,15 +237,25 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         transport_type: transportType,
         bus_type: transportType === 'Train' ? busType : null,
         room_type: roomType,
+        base_amount: baseUnitPrice * travelerCount,
+        transport_amount: transportAddon * travelerCount,
+        room_amount: roomAddon * travelerCount,
         additional_seva_type: additionalSevaType ?? null,
         additional_seva_date: additionalSevaDate ?? null,
         additional_seva_amount: additionalSevaPrice > 0 ? additionalSevaPrice : null,
+        total_amount: totalAmount,
       })
       .select('*')
       .single()
 
     if (bookingError || !booking) {
+      logError('Travel', 'Failed to create booking row in database', bookingError)
       throw new HttpError(500, bookingError?.message ?? 'Failed to create booking')
+    }
+
+    logInfo('Travel', `Travel Booking created: ${booking.id}`, { bookingId: booking.id, bookingReference, totalAmount })
+    if (authRequest.userId) {
+      await createNotification(authRequest.userId, 'Booking Created', `Your Yatra booking reference ${bookingReference} has been created and is pending payment.`)
     }
 
     try {
@@ -331,11 +350,21 @@ bookingsRouter.get('/', requireAuth, async (request, response, next) => {
       .eq('user_id', authRequest.userId)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      throw new HttpError(500, error.message)
+    const userBookings = bookings ?? []
+    if (userBookings.length > 0) {
+      const bookingIds = userBookings.map((b) => b.id)
+      const { data: sevas } = await supabaseAdmin
+        .from('seva_bookings')
+        .select('*')
+        .in('travel_booking_id', bookingIds)
+
+      const sevaMap = new Map((sevas ?? []).map((s: any) => [s.travel_booking_id, s]))
+      userBookings.forEach((b: any) => {
+        b.linkedSeva = sevaMap.get(b.id) ?? null
+      })
     }
 
-    response.json({ bookings: bookings ?? [] })
+    response.json({ bookings: userBookings })
   } catch (error) {
     next(error)
   }
@@ -360,7 +389,25 @@ bookingsRouter.get('/:bookingId', requireAuth, async (request, response, next) =
       throw new HttpError(403, 'Booking does not belong to the authenticated user')
     }
 
-    response.json({ booking })
+    const { data: linkedSeva } = await supabaseAdmin
+      .from('seva_bookings')
+      .select('*')
+      .or(`travel_booking_id.eq.${booking.id},notes.eq.Additional Seva with Yatra Booking ${booking.booking_reference}`)
+      .maybeSingle()
+
+    const pricing = {
+      baseAmount: booking.base_amount ?? (booking.total_amount - (booking.additional_seva_amount || 0)),
+      transportAmount: booking.transport_amount ?? 0,
+      roomAmount: booking.room_amount ?? 0,
+      sevaAmount: booking.additional_seva_amount ?? 0,
+      totalAmount: booking.total_amount,
+    }
+
+    response.json({
+      booking: { ...booking, linkedSeva: linkedSeva ?? null },
+      linkedSeva: linkedSeva ?? null,
+      pricing,
+    })
   } catch (error) {
     next(error)
   }
@@ -390,7 +437,8 @@ bookingsRouter.post('/:bookingId/cancel', requireAuth, async (request, response,
       return
     }
 
-    if (booking.status !== 'payment_pending' && booking.status !== 'confirmed') {
+    const cancellableStatuses = ['payment_pending', 'verification_pending', 'pending', 'confirmed', 'paid']
+    if (!cancellableStatuses.includes(booking.status)) {
       throw new HttpError(400, `Cannot cancel booking with status: ${booking.status}`)
     }
 
@@ -406,17 +454,16 @@ bookingsRouter.post('/:bookingId/cancel', requireAuth, async (request, response,
       throw new HttpError(500, 'Failed to cancel booking')
     }
 
-    // If it was confirmed, we should technically restore seats, but since Razorpay refunds 
-    // are manual, seat restoration could be complex. For now we will increment remaining_seats
-    // back if it was 'confirmed'.
-    if (booking.status === 'confirmed' && booking.travel_packages) {
-      const packageId = booking.package_id
-      const countToRestore = booking.traveler_count
-      // Increment seats
-      await supabaseAdmin.rpc('increment_seats', {
-        pid: packageId,
-        count: countToRestore
-      })
+    // If it had reserved seats (confirmed, paid, verification_pending, pending), increment remaining_seats back
+    if (booking.package_id) {
+      try {
+        await supabaseAdmin.rpc('increment_seats' as never, {
+          pid: booking.package_id,
+          count: booking.traveler_count
+        } as never)
+      } catch {
+        // Non-critical RPC seat increment catch
+      }
     }
 
     response.json({ success: true, booking: updatedBooking })

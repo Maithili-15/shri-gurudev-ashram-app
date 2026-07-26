@@ -96,7 +96,15 @@ export default function StepDate({ onNext, onBack: _onBack }: StepDateProps) {
     setChecking(true)
     try {
       const result = await checkAnnadanAvailability(iso)
-      setAvailabilityMsg(result)
+      if (result && typeof result.available === 'boolean') {
+        setAvailabilityMsg(result)
+      } else {
+        const monthInfo = monthlyAvailability[iso]
+        setAvailabilityMsg({ available: monthInfo ? monthInfo.available : true })
+      }
+    } catch {
+      const monthInfo = monthlyAvailability[iso]
+      setAvailabilityMsg({ available: monthInfo ? monthInfo.available : true })
     } finally {
       setChecking(false)
     }
@@ -287,6 +295,6 @@ const styles = StyleSheet.create({
   availChecking: { color: '#9E9080', fontSize: 13, fontWeight: '600' },
   availText: { fontSize: 13, fontWeight: '700', flex: 1, lineHeight: 20 },
 
-  ctaButton: { minHeight: 60, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  ctaButton: { height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 })

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { HttpError } from '../errors'
-import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
+import { AuthenticatedRequest, optionalAuth, requireAuth } from '../middleware/auth'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import crypto from 'crypto'
 
@@ -335,6 +335,80 @@ sevaRouter.get('/:type/availability', async (request, response, next) => {
       available: availableSeats > 0,
       remainingSeats: Math.max(0, availableSeats)
     })
+  } catch (error) {
+    next(error)
+  }
+})
+
+sevaRouter.get('/pricing', async (_request, response) => {
+  response.json({
+    success: true,
+    pricing: {
+      yajman: 5100,
+    },
+  })
+})
+
+sevaRouter.get('/upcoming', optionalAuth, async (request, response, next) => {
+  try {
+    const userId = (request as AuthenticatedRequest).userId
+    const today = new Date().toISOString().split('T')[0]
+
+    let query = supabaseAdmin
+      .from('seva_bookings')
+      .select('*')
+      .in('status', ['paid', 'payment_pending'])
+      .gte('seva_date', today)
+      .order('seva_date', { ascending: true })
+
+    if (userId) {
+      query = query.eq('user_id', userId)
+    }
+
+    const { data, error } = await query
+    if (error) throw new HttpError(500, 'Failed to fetch upcoming sevas')
+
+    const list = (data ?? []).map((b) => ({
+      id: b.id,
+      bookingReference: b.booking_reference,
+      sevaType: b.seva_type,
+      sevaDate: b.seva_date,
+      fullName: b.full_name,
+      phoneNumber: b.phone_number,
+      totalAmount: b.total_amount,
+      status: b.status,
+    }))
+
+    response.json({ success: true, data: list })
+  } catch (error) {
+    next(error)
+  }
+})
+
+sevaRouter.get('/history', requireAuth, async (request, response, next) => {
+  try {
+    const userId = (request as AuthenticatedRequest).userId
+
+    const { data, error } = await supabaseAdmin
+      .from('seva_bookings')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw new HttpError(500, 'Failed to fetch seva history')
+
+    const list = (data ?? []).map((b) => ({
+      id: b.id,
+      bookingReference: b.booking_reference,
+      sevaType: b.seva_type,
+      sevaDate: b.seva_date,
+      fullName: b.full_name,
+      phoneNumber: b.phone_number,
+      totalAmount: b.total_amount,
+      status: b.status,
+    }))
+
+    response.json({ success: true, data: list })
   } catch (error) {
     next(error)
   }

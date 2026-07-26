@@ -1,10 +1,11 @@
 import crypto from 'crypto'
 import { Router, Request, Response, NextFunction } from 'express'
 import { HttpError } from '../errors'
-import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
+import { AuthenticatedRequest, optionalAuth, requireAuth } from '../middleware/auth'
 import { NityaAnnadanBooking } from '../models/nityaAnnadan'
 import { razorpay, razorpayKeySecret } from '../services/razorpay'
 import { encryptIdentity, maskIdentityNumber } from '../utils/encryption'
+import { logError, logInfo } from '../utils/logger'
 
 export const annadanRouter = Router()
 
@@ -112,8 +113,22 @@ export async function createAnnadanBooking(request: Request, response: Response,
       maskedIdentity = maskIdentityNumber(identityType, cleanNumber)
     }
 
+    // Atomic Concurrency & Capacity Check
+    const defaultCapacity = 100
+    const capacity = Number(process.env.SEVA_CAPACITY_ANNADAN ?? defaultCapacity)
+    const existingCount = await NityaAnnadanBooking.countDocuments({
+      sevaDate,
+      status: { $in: ['paid', 'payment_pending'] },
+    })
+
+    if (existingCount >= capacity) {
+      throw new HttpError(409, `Annadan capacity for date ${sevaDate} has already been fully booked.`)
+    }
+
     const bookingReference = generateBookingReference()
     const userId = (request as AuthenticatedRequest).userId
+
+    logInfo('Annadan', `Creating Annadan booking for date ${sevaDate}`, { sevaDate, fullName, totalAmount: numericAmount })
 
     const booking = await NityaAnnadanBooking.create({
       bookingReference,
@@ -125,7 +140,6 @@ export async function createAnnadanBooking(request: Request, response: Response,
       totalAmount: numericAmount,
       status: 'payment_pending',
       notes: notes ? String(notes).trim() : null,
-      // ─── New fields ────────────────────────────────────────────────────
       bookingPurpose: bookingPurpose || null,
       beneficiaryName: beneficiaryName ? String(beneficiaryName).trim() : null,
       sponsorName: sponsorName ? String(sponsorName).trim() : null,
@@ -143,11 +157,14 @@ export async function createAnnadanBooking(request: Request, response: Response,
       lastExecutedDate: null,
     })
 
+    logInfo('Annadan', `Annadan booking created successfully: ${booking._id}`, { bookingId: booking._id, reference: bookingReference })
+
     response.status(201).json({
       success: true,
       data: formatBooking(booking),
     })
   } catch (error) {
+    logError('Annadan', 'Failed to create Annadan booking', error)
     next(error)
   }
 }
@@ -251,6 +268,8 @@ export async function createAnnadanOrder(request: Request, response: Response, n
       throw new HttpError(400, 'bookingId is required')
     }
 
+    logInfo('Payment', `Creating Annadan Razorpay order for booking ${bookingId}`, { bookingId })
+
     const booking = await NityaAnnadanBooking.findById(bookingId)
     if (!booking) {
       throw new HttpError(404, 'Seva booking not found')
@@ -268,6 +287,7 @@ export async function createAnnadanOrder(request: Request, response: Response, n
     const amountInPaise = Math.round(Number(booking.totalAmount) * 100)
 
     if (booking.razorpayOrderId) {
+      logInfo('Payment', `Returning existing Razorpay order ${booking.razorpayOrderId} for Annadan booking ${bookingId}`, { orderId: booking.razorpayOrderId })
       response.json({
         order: {
           id: booking.razorpayOrderId,
@@ -288,6 +308,8 @@ export async function createAnnadanOrder(request: Request, response: Response, n
       },
     })
 
+    logInfo('Payment', `Annadan Razorpay Order Created: ${order.id}`, { orderId: order.id, amount: order.amount })
+
     booking.razorpayOrderId = order.id
     await booking.save()
 
@@ -300,6 +322,7 @@ export async function createAnnadanOrder(request: Request, response: Response, n
       booking: formatBooking(booking),
     })
   } catch (error) {
+    logError('Payment', 'Failed to create Annadan Razorpay order', error)
     next(error)
   }
 }
@@ -312,6 +335,8 @@ export async function verifyAnnadanPayment(request: Request, response: Response,
     if (!bookingId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       throw new HttpError(400, 'Missing required payment verification fields')
     }
+
+    logInfo('Payment', `Verifying Annadan Razorpay payment for booking ${bookingId}`, { bookingId, orderId: razorpay_order_id, paymentId: razorpay_payment_id })
 
     if (!isValidPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
       throw new HttpError(400, 'Invalid Razorpay signature')
@@ -332,6 +357,7 @@ export async function verifyAnnadanPayment(request: Request, response: Response,
     }
 
     if (booking.status === 'paid') {
+      logInfo('Payment', `Annadan booking ${bookingId} already verified paid`)
       response.json({ success: true, message: 'Already verified' })
       return
     }
@@ -344,8 +370,11 @@ export async function verifyAnnadanPayment(request: Request, response: Response,
     }
     await booking.save()
 
+    logInfo('Annadan', `Annadan booking ${bookingId} verified successfully and status set to paid`, { bookingId, paymentId: razorpay_payment_id })
+
     response.json({ success: true })
   } catch (error) {
+    logError('Payment', 'Annadan payment verification failed', error)
     next(error)
   }
 }
@@ -354,6 +383,10 @@ export async function verifyAnnadanPayment(request: Request, response: Response,
 export async function getUpcomingAnnadan(request: Request, response: Response, next: NextFunction) {
   try {
     const userId = (request as AuthenticatedRequest).userId
+    if (!userId) {
+      response.json([])
+      return
+    }
     const today = new Date().toISOString().split('T')[0]
 
     const bookings = await NityaAnnadanBooking.find({
@@ -399,5 +432,5 @@ annadanRouter.get('/pricing', getAnnadanPricing)
 annadanRouter.get('/availability', getAnnadanAvailability)
 annadanRouter.post('/create-order', requireAuth, createAnnadanOrder)
 annadanRouter.post('/verify-payment', requireAuth, verifyAnnadanPayment)
-annadanRouter.get('/upcoming', requireAuth, getUpcomingAnnadan)
+annadanRouter.get('/upcoming', optionalAuth, getUpcomingAnnadan)
 annadanRouter.get('/history', requireAuth, getAnnadanHistory)

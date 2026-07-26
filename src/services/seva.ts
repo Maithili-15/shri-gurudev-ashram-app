@@ -27,17 +27,17 @@ export type DateAvailabilityInfo = {
 export async function fetchSevaPricing(): Promise<Record<SevaType, number>> {
   try {
     const [annadanRes, yajmanRes] = await allSettled([
-      api.get('/api/annadan/pricing'),
-      api.get('/api/seva/pricing'),
+      api.get('/api/annadan/pricing').catch(() => ({ data: null })),
+      api.get('/api/seva/pricing').catch(() => ({ data: null })),
     ]);
 
     const annadanPrice =
-      annadanRes.status === 'fulfilled' && annadanRes.value.data?.pricing?.annadan
+      annadanRes.status === 'fulfilled' && annadanRes.value?.data?.pricing?.annadan
         ? annadanRes.value.data.pricing.annadan
         : 2100;
 
     const yajmanPrice =
-      yajmanRes.status === 'fulfilled' && yajmanRes.value.data?.pricing?.yajman
+      yajmanRes.status === 'fulfilled' && yajmanRes.value?.data?.pricing?.yajman
         ? yajmanRes.value.data.pricing.yajman
         : 5100;
 
@@ -117,29 +117,31 @@ export async function verifySevaPayment(paymentData: {
 // ─── Upcoming Sevas for the Home feed (Merging Nitya Annadan + Yajman) ───────
 export async function fetchUpcomingSevas(): Promise<UpcomingSeva[]> {
   const [annadanRes, yajmanRes] = await allSettled([
-    api.get('/api/annadan/upcoming'),
-    api.get('/api/seva/upcoming'),
+    api.get('/api/annadan/upcoming').catch(() => ({ data: [] })),
+    api.get('/api/seva/upcoming').catch(() => ({ data: [] })),
   ]);
 
-  const annadanList: UpcomingSeva[] =
-    annadanRes.status === 'fulfilled' && Array.isArray(annadanRes.value.data)
-      ? annadanRes.value.data.map((b: any) => ({
-          id: b.id,
-          sevaType: 'annadan',
-          date: b.sevaDate,
-          isAvailable: b.status === 'paid' || b.status === 'payment_pending',
-        }))
-      : [];
+  const annadanData = annadanRes.status === 'fulfilled' ? annadanRes.value?.data : [];
+  const annadanRaw = Array.isArray(annadanData) ? annadanData : (annadanData?.data ?? []);
+  const annadanList: UpcomingSeva[] = Array.isArray(annadanRaw)
+    ? annadanRaw.map((b: any) => ({
+        id: b.id,
+        sevaType: 'annadan',
+        date: b.sevaDate,
+        isAvailable: b.status === 'paid' || b.status === 'payment_pending',
+      }))
+    : [];
 
-  const yajmanList: UpcomingSeva[] =
-    yajmanRes.status === 'fulfilled' && Array.isArray(yajmanRes.value.data)
-      ? yajmanRes.value.data.map((b: any) => ({
-          id: b.id,
-          sevaType: b.sevaType,
-          date: b.sevaDate,
-          isAvailable: b.status === 'paid' || b.status === 'payment_pending',
-        }))
-      : [];
+  const yajmanData = yajmanRes.status === 'fulfilled' ? yajmanRes.value?.data : [];
+  const yajmanRaw = Array.isArray(yajmanData) ? yajmanData : (yajmanData?.data ?? []);
+  const yajmanList: UpcomingSeva[] = Array.isArray(yajmanRaw)
+    ? yajmanRaw.map((b: any) => ({
+        id: b.id,
+        sevaType: b.sevaType,
+        date: b.sevaDate,
+        isAvailable: b.status === 'paid' || b.status === 'payment_pending',
+      }))
+    : [];
 
   return [...annadanList, ...yajmanList];
 }
@@ -147,8 +149,8 @@ export async function fetchUpcomingSevas(): Promise<UpcomingSeva[]> {
 // ─── Seva History (Merging Nitya Annadan + Yajman Only) ──────────────────────
 export async function fetchSevaHistory(): Promise<SevaBooking[]> {
   const [annadanRes, yajmanRes] = await allSettled([
-    api.get('/api/annadan/history'),
-    api.get('/api/seva/history'),
+    api.get('/api/annadan/history').catch(() => ({ data: [] })),
+    api.get('/api/seva/history').catch(() => ({ data: [] })),
   ]);
 
   const annadanList: SevaBooking[] =
@@ -170,14 +172,28 @@ export async function fetchSevaHistory(): Promise<SevaBooking[]> {
 export async function checkAnnadanAvailability(
   date: string,
 ): Promise<{ available: boolean; reason?: string }> {
-  const { data } = await api.get(`/api/annadan/availability?date=${date}`);
-  return data;
+  try {
+    const res = await api.get(`/api/annadan/availability?date=${date}`);
+    if (res?.data && typeof res.data.available === 'boolean') {
+      return res.data;
+    }
+    return { available: true };
+  } catch {
+    return { available: true };
+  }
 }
 
 // ─── Check Yajman date availability ────────────────────────────────────
 export async function checkYajmanAvailability(
   date: string,
 ): Promise<{ available: boolean; reason?: string }> {
-  const { data } = await api.get(`/api/seva/yajman/availability?date=${date}`);
-  return data;
+  try {
+    const res = await api.get(`/api/seva/yajman/availability?date=${date}`);
+    if (res?.data && typeof res.data.available === 'boolean') {
+      return res.data;
+    }
+    return { available: true };
+  } catch {
+    return { available: true };
+  }
 }

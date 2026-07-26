@@ -142,6 +142,6 @@ const styles = StyleSheet.create({
   },
   privacyText: { color: '#9E9080', fontSize: 12, lineHeight: 18, flex: 1 },
 
-  ctaButton: { minHeight: 60, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  ctaButton: { height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 })
