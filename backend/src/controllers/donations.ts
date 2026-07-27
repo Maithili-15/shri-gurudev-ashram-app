@@ -38,13 +38,14 @@ async function canonicalHead(input: any) {
 function validateDonor(donor: any) {
   const addressObj = donor?.addressObj
   const address = text(donor?.address) || [addressObj?.line, addressObj?.city, addressObj?.state, addressObj?.country, addressObj?.pincode].filter(Boolean).join(', ')
-  if (!text(donor?.name) || !text(donor?.mobile) || !address || !text(donor?.dob) || text(donor?.idType) !== 'PAN' || !text(donor?.idNumber)) throw new HttpError(400, 'Missing required donor details')
+  const idType = text(donor?.idType) || 'PAN'
+  if (!text(donor?.name) || !text(donor?.mobile) || !address || !text(donor?.dob) || idType !== 'PAN' || !text(donor?.idNumber)) throw new HttpError(400, 'Missing required donor details')
   if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(text(donor.idNumber).toUpperCase())) throw new HttpError(400, 'Invalid PAN number format')
   const dob = new Date(donor.dob)
   if (Number.isNaN(dob.getTime())) throw new HttpError(400, 'Invalid date of birth')
   const today = new Date(); let age = today.getFullYear() - dob.getFullYear(); const month = today.getMonth() - dob.getMonth(); if (month < 0 || (month === 0 && today.getDate() < dob.getDate())) age -= 1
   if (age < 18) throw new HttpError(400, 'Donor must be 18 years or older')
-  return { ...donor, name: text(donor.name), mobile: text(donor.mobile), idNumber: text(donor.idNumber).toUpperCase(), address, dob }
+  return { ...donor, name: text(donor.name), mobile: text(donor.mobile), idType, idNumber: text(donor.idNumber).toUpperCase(), address, dob }
 }
 
 export async function createDonation(request: Request, response: Response, next: NextFunction) {

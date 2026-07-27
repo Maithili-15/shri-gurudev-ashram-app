@@ -249,6 +249,7 @@ export default function DonationScreen() {
           name: state.fullName,
           mobile: state.mobile,
           email: '', // unused in new form
+          idType: 'PAN',
           idNumber: state.pan.toUpperCase(),
           dob: state.dob?.toISOString(),
           anonymousDisplay: state.anonymousDisplay,
@@ -290,7 +291,8 @@ export default function DonationScreen() {
       } as never)
 
     } catch (error: any) {
-      Alert.alert('Payment Error', error?.message || 'Failed to complete donation. Please try again.')
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to complete donation. Please try again.'
+      Alert.alert('Payment Error', errorMessage)
     } finally {
       setIsPaying(false)
     }
