@@ -14,6 +14,7 @@ export type SevaDevoteeFields = {
 export type SevaStoreState = {
   // Current seva type being booked
   sevaType: SevaType | null;
+  sevaPackageId: string | null;
 
   // Selected date for the seva
   selectedDate: string; // ISO: YYYY-MM-DD
@@ -46,6 +47,7 @@ export type SevaStoreState = {
 
   // Actions
   setSevaType: (type: SevaType) => void;
+  setSevaPackageId: (id: string | null) => void;
   setSelectedDate: (date: string) => void;
   updateDevoteeField: <K extends keyof SevaDevoteeFields>(
     field: K,
@@ -71,6 +73,7 @@ export type SevaStoreState = {
 // ─── Initial State ────────────────────────────────────────────────────────────
 const initialBookingState = {
   sevaType: null,
+  sevaPackageId: null,
   selectedDate: '',
   fullName: '',
   phoneNumber: '',
@@ -99,6 +102,8 @@ export const useSevaStore = create<SevaStoreState>()(
       sevaHistory: [],
 
       setSevaType: (type) => set({ sevaType: type }),
+
+      setSevaPackageId: (id) => set({ sevaPackageId: id }),
 
       setSelectedDate: (date) => set({ selectedDate: date }),
 

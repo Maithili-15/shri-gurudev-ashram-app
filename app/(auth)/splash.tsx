@@ -1,5 +1,5 @@
 import React from 'react'
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ImageBackground, Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
@@ -11,6 +11,9 @@ export default function SplashRoute() {
     <ImageBackground source={require('../../assets/gurudev.jpeg')} style={styles.container} resizeMode="cover">
       <LinearGradient colors={['rgba(34,20,9,0.36)', 'rgba(34,20,9,0.82)']} style={styles.overlay}>
         <View style={styles.content}>
+          <View style={styles.logoWrap}>
+            <Image source={require('../../assets/recieptLogo.jpeg')} style={styles.logo} resizeMode="contain" />
+          </View>
           <View style={styles.badge}>
             <MaterialIcons name="spa" size={18} color="#8B5A00" />
             <Text style={styles.badgeText}>Jai Gurudev</Text>
@@ -34,6 +37,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   overlay: { flex: 1, justifyContent: 'flex-end' },
   content: { padding: 24, paddingBottom: 42, gap: 18 },
+  logoWrap: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', backgroundColor: '#FFFFFF', padding: 4, elevation: 4, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  logo: { width: '100%', height: '100%', borderRadius: 36 },
   badge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',

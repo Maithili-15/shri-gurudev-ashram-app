@@ -13,7 +13,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
-import { createSevaBooking, fetchSevaPricing } from '../../../../src/services/seva'
+import { createSevaBooking } from '../../../../src/services/seva'
+import api from '../../../../src/api/axiosClient'
 
 function formatDateString(isoStr?: string): string {
   if (!isoStr) return '—'
@@ -40,7 +41,17 @@ export default function YajmanReviewRoute() {
   const [yajmanPrice, setYajmanPrice] = useState(isAartiMode ? 2100 : 5100)
 
   React.useEffect(() => {
-    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(isAartiMode ? 2100 : p.yajman) }).catch(() => {})
+    api.get('/api/public/seva-packages')
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          const typeToFind = isAartiMode ? 'guruji_aarti' : 'yajman'
+          const pkg = res.data.find((p: any) => p.sevaType === typeToFind)
+          if (pkg) {
+            setYajmanPrice(pkg.price)
+          }
+        }
+      })
+      .catch(console.error)
   }, [isAartiMode])
 
   const displayDate = formatDateString(selectedDate)
@@ -55,6 +66,7 @@ export default function YajmanReviewRoute() {
         fullName,
         phoneNumber,
         totalAmount: yajmanPrice,
+        sevaPackageId: useSevaStore.getState().sevaPackageId ?? undefined,
       })
       setBookingResult(booking.id, booking.bookingReference, booking.transactionId)
 

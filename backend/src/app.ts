@@ -19,6 +19,8 @@ import { donationPublicRouter } from './routes/donationPublic'
 import { donationAuthRouter } from './routes/donationAuth'
 import { collectorRouter } from './routes/collector'
 import { donationAdminRouter, donationHeadAdminRouter } from './routes/donationAdmin'
+import { sevaPackagesPublicRouter } from './routes/sevaPackagesPublic'
+import { sevaPackagesAdminRouter } from './routes/sevaPackagesAdmin'
 import { DonationUser } from './models/user'
 import { Donation } from './models/donation'
 import { requireDonationAuth } from './middleware/donationAuth'
@@ -94,6 +96,7 @@ app.use('/api/notifications', notificationsRouter)
 app.use('/api/seva', sevaRouter)
 app.use('/api/annadan', annadanRouter)
 app.use('/api/donations', donationsRouter)
+app.use('/api/public/seva-packages', sevaPackagesPublicRouter)
 app.use('/api/public', donationPublicRouter)
 app.use('/api/auth', authLimiter, donationAuthRouter)
 app.use('/api/collector', collectorRouter)
@@ -110,6 +113,7 @@ app.get('/api/leaderboard/top', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 app.use('/api/admin/system', adminLimiter, donationAdminRouter)
+app.use('/api/admin/seva-packages', adminLimiter, sevaPackagesAdminRouter)
 app.use('/api/admin/website/donation-heads', adminLimiter, donationHeadAdminRouter)
 app.get('/api/user/donations', requireDonationAuth, async (request, response, next) => {
   try {

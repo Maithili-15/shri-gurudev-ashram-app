@@ -14,7 +14,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSevaStore } from '../../../../src/store/useSevaStore'
-import { checkYajmanAvailability, fetchSevaPricing, fetchSevaMonthlyAvailability, DateAvailabilityInfo } from '../../../../src/services/seva'
+import { checkYajmanAvailability, fetchSevaMonthlyAvailability, DateAvailabilityInfo } from '../../../../src/services/seva'
+import api from '../../../../src/api/axiosClient'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = [
@@ -82,6 +83,7 @@ export default function YajmanCalendarRoute() {
   const defaultPrice = isAartiMode ? 2100 : 5100
 
   const insets = useSafeAreaInsets()
+  const setSevaPackageId = useSevaStore((s) => s.setSevaPackageId)
   const setSevaType = useSevaStore((s) => s.setSevaType)
   const setSelectedDate = useSevaStore((s) => s.setSelectedDate)
   const resetSeva = useSevaStore((s) => s.resetSeva)
@@ -93,14 +95,26 @@ export default function YajmanCalendarRoute() {
   const [checking, setChecking] = useState(false)
   const [availabilityMsg, setAvailabilityMsg] = useState<{ available: boolean; reason?: string } | null>(null)
   const [showCalendar, setShowCalendar] = useState(false)
-  const [yajmanPrice, setYajmanPrice] = useState<number>(5100)
+  const [yajmanPrice, setYajmanPrice] = useState<number>(defaultPrice)
   const [monthlyAvailability, setMonthlyAvailability] = useState<Record<string, DateAvailabilityInfo>>({})
   const [loadingMonth, setLoadingMonth] = useState(false)
 
   useEffect(() => {
-    fetchSevaPricing().then((p) => { if (p?.yajman) setYajmanPrice(isAartiMode ? 2100 : p.yajman) }).catch(() => {})
     resetSeva()
-    setSevaType('yajman')
+    setSevaType(isAartiMode ? 'guruji_aarti' : 'yajman_pad' as any)
+    
+    api.get('/api/public/seva-packages')
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          const typeToFind = isAartiMode ? 'guruji_aarti' : 'yajman'
+          const pkg = res.data.find((p: any) => p.sevaType === typeToFind)
+          if (pkg) {
+            setYajmanPrice(pkg.price)
+            setSevaPackageId(pkg.id)
+          }
+        }
+      })
+      .catch(console.error)
   }, [isAartiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

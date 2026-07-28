@@ -28,6 +28,7 @@ import { BusType, RoomType, TransportType } from '../../utils/yatraPricing'
 import { isNonEmptyString, isValidPhoneNumber, normalizeDigits, isValidAadhaarNumber } from '../../utils/validation'
 import ImageUploadWidget from '../../components/ImageUploadWidget'
 import { fetchSevaMonthlyAvailability } from '../../services/seva'
+import api from '../../api/axiosClient'
 
 const COLORS = {
   background: '#FAF6F0',
@@ -54,29 +55,7 @@ const STEP_TITLES = [
   { key: 'additional_seva', label: '4', title: 'Additional Seva' },
 ] as const
 
-const ADDON_SERVICE_OPTIONS = [
-  {
-    value: 'none',
-    title: 'No Additional Service',
-    description: 'Proceed directly with your Yatra booking without an additional seva.',
-    icon: 'do-not-disturb-alt',
-    price: 0,
-  },
-  {
-    value: 'guruji_aarti',
-    title: 'Guruji Aarti Seva',
-    description: 'Receive the sacred privilege of performing Guruji\'s Aarti during the Katha.',
-    icon: 'local-fire-department',
-    price: 2100,
-  },
-  {
-    value: 'yajman_pad',
-    title: 'Yajman Pad Booking',
-    description: 'Become the principal Yajman devotee during the sacred Katha discourse.',
-    icon: 'self-improvement',
-    price: 5100,
-  },
-]
+// ADDON_SERVICE_OPTIONS is now fetched dynamically from /api/public/seva-packages
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -460,6 +439,38 @@ export default function BookingForm() {
   const setAddonService = useBookingDraftStore((state) => state.setAddonService)
   const [stepIndex, setStepIndex] = useState(0)
   const [activeDatePickerIndex, setActiveDatePickerIndex] = useState<number | null>(null)
+  
+  const [dynamicSevaPackages, setDynamicSevaPackages] = useState<any[]>([])
+  useEffect(() => {
+    api.get('/api/public/seva-packages')
+      .then(res => {
+        if (Array.isArray(res.data)) setDynamicSevaPackages(res.data)
+      })
+      .catch(console.error)
+  }, [])
+
+  const addonOptions = useMemo(() => {
+    const base = [{
+      value: 'none',
+      title: 'No Additional Service',
+      description: 'Proceed directly with your Yatra booking without an additional seva.',
+      icon: 'do-not-disturb-alt',
+      price: 0,
+      allowDateSelection: false,
+    }]
+    if (dynamicSevaPackages.length > 0) {
+      const dynamic = dynamicSevaPackages.map(pkg => ({
+        value: pkg.id,
+        title: pkg.title,
+        description: pkg.description || '',
+        icon: pkg.icon || 'self-improvement',
+        price: pkg.price,
+        allowDateSelection: pkg.allowDateSelection,
+      }))
+      return [...base, ...dynamic]
+    }
+    return base
+  }, [dynamicSevaPackages])
 
   const activeDob = useBookingDraftStore((state) =>
     activeDatePickerIndex !== null ? state.passengers[activeDatePickerIndex]?.dob : null
@@ -620,7 +631,7 @@ export default function BookingForm() {
         busType: transportType === 'Train' ? busType : undefined,
         roomType,
         passengers: passengersWithDocs,
-        additionalSevaType: addonService?.type ?? undefined,
+        additionalSevaPackageId: addonService?.packageId ?? undefined,
         additionalSevaDate: addonService?.bookingDate ?? undefined,
       })
 
@@ -893,8 +904,8 @@ export default function BookingForm() {
                 </View>
 
                 <View style={styles.choiceList}>
-                  {ADDON_SERVICE_OPTIONS.map((option) => {
-                    const isSelected = option.value === 'none' ? !addonService : addonService?.type === option.value
+                  {addonOptions.map((option) => {
+                    const isSelected = option.value === 'none' ? !addonService : addonService?.packageId === option.value
                     return (
                       <React.Fragment key={option.value}>
                         <ChoiceCard
@@ -910,14 +921,15 @@ export default function BookingForm() {
                               const todayIso = new Date().toISOString().split('T')[0]
                               const defaultSevaDate = selectedPackage?.startDate && selectedPackage.startDate >= todayIso ? selectedPackage.startDate : todayIso
                               setAddonService({
-                                type: option.value as 'guruji_aarti' | 'yajman_pad',
-                                bookingDate: addonService?.type === option.value ? addonService.bookingDate : defaultSevaDate,
+                                packageId: option.value,
+                                title: option.title,
                                 amount: option.price,
+                                bookingDate: option.allowDateSelection ? (addonService?.packageId === option.value && addonService?.bookingDate ? addonService.bookingDate : defaultSevaDate) : undefined,
                               })
                             }
                           }}
                         />
-                        {isSelected && option.value !== 'none' ? (
+                        {isSelected && option.value !== 'none' && option.allowDateSelection ? (
                           <SevaInlineCalendar
                             selectedIso={addonService?.bookingDate ?? ''}
                             sevaTitle={option.title}
@@ -935,9 +947,9 @@ export default function BookingForm() {
                   })}
                 </View>
 
-                {addonService && !addonService.bookingDate ? (
+                {addonService && addonService.bookingDate === undefined && addonOptions.find(o => o.value === addonService.packageId)?.allowDateSelection ? (
                   <Text style={styles.errorText}>
-                    Please select an available date for your {addonService.type === 'guruji_aarti' ? 'Guruji Aarti Seva' : 'Yajman Pad Booking'} on the calendar above.
+                    Please select an available date for {addonService.title} on the calendar above.
                   </Text>
                 ) : null}
 
@@ -976,7 +988,7 @@ export default function BookingForm() {
             <Pressable style={styles.modalCard} onPress={() => undefined}>
               <Text style={styles.modalTitle}>{activeDatePickerIndex === -1 ? 'Select Additional Seva Date' : 'Select Date of Birth'}</Text>
               <DateTimePicker
-                value={activeDatePickerIndex === -1 && addonService ? new Date(addonService.bookingDate) : activeDob ? new Date(activeDob) : new Date(1995, 0, 1)}
+                value={activeDatePickerIndex === -1 && addonService ? new Date(addonService.bookingDate || new Date()) : activeDob ? new Date(activeDob) : new Date(1995, 0, 1)}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
                 maximumDate={activeDatePickerIndex === -1 ? undefined : new Date()}

@@ -29,6 +29,7 @@ type CreateBookingBody = {
   passengers?: CreateBookingPassengerInput[]
   additionalSevaType?: string
   additionalSevaDate?: string
+  additionalSevaPackageId?: string
 }
 
 bookingsRouter.post('/', requireAuth, async (request, response, next) => {
@@ -43,6 +44,7 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
       passengers,
       additionalSevaType,
       additionalSevaDate,
+      additionalSevaPackageId,
     } = request.body as CreateBookingBody
 
     // 1. Required fields and empty value checks
@@ -164,23 +166,48 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
 
     const packageUnitPrice = baseUnitPrice + transportAddon + roomAddon
     let additionalSevaPrice = 0
+    let resolvedSevaType = additionalSevaType
 
-    if (additionalSevaType && additionalSevaType !== 'none') {
+    if (additionalSevaPackageId && additionalSevaPackageId !== 'none') {
+      const { data: sevaPackage, error: sevaPackageError } = await supabaseAdmin
+        .from('seva_packages')
+        .select('id, price, is_active, booking_enabled, allow_date_selection, seva_type')
+        .eq('id', additionalSevaPackageId)
+        .is('deleted_at', null)
+        .single()
+
+      if (sevaPackageError || !sevaPackage) {
+        throw new HttpError(404, 'Additional Seva package not found')
+      }
+      if (!sevaPackage.is_active || !sevaPackage.booking_enabled) {
+        throw new HttpError(400, 'Selected Seva package is not active or booking is disabled')
+      }
+
+      if (sevaPackage.allow_date_selection) {
+        if (!additionalSevaDate || !/^\d{4}-\d{2}-\d{2}$/.test(additionalSevaDate)) {
+          throw new HttpError(400, 'additionalSevaDate is required in YYYY-MM-DD format for this package')
+        }
+      }
+
+      additionalSevaPrice = Number(sevaPackage.price)
+      resolvedSevaType = sevaPackage.seva_type
+    } else if (additionalSevaType && additionalSevaType !== 'none') {
       if (!['guruji_aarti', 'yajman_pad', 'yajman'].includes(additionalSevaType)) {
         throw new HttpError(400, 'Invalid additionalSevaType. Allowed: guruji_aarti, yajman_pad')
       }
       if (!additionalSevaDate || !/^\d{4}-\d{2}-\d{2}$/.test(additionalSevaDate)) {
         throw new HttpError(400, 'additionalSevaDate is required in YYYY-MM-DD format')
       }
+      additionalSevaPrice = additionalSevaType === 'guruji_aarti' ? 2100 : Number(process.env.YAJMAN_SEVA_PRICE ?? 5100)
+    }
 
+    if (additionalSevaDate) {
       if (travelPackage.start_date && additionalSevaDate < travelPackage.start_date) {
         throw new HttpError(400, `Seva date (${additionalSevaDate}) cannot be earlier than Yatra departure date (${travelPackage.start_date}).`)
       }
       if (travelPackage.end_date && additionalSevaDate > travelPackage.end_date) {
         throw new HttpError(400, `Seva date (${additionalSevaDate}) cannot be later than Yatra return date (${travelPackage.end_date}).`)
       }
-
-      additionalSevaPrice = additionalSevaType === 'guruji_aarti' ? 2100 : Number(process.env.YAJMAN_SEVA_PRICE ?? 5100)
     }
 
     const totalAmount = (packageUnitPrice * travelerCount) + additionalSevaPrice
@@ -248,9 +275,10 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
         base_amount: baseUnitPrice * travelerCount,
         transport_amount: transportAddon * travelerCount,
         room_amount: roomAddon * travelerCount,
-        additional_seva_type: additionalSevaType ?? null,
+        additional_seva_type: additionalSevaPackageId ? null : (additionalSevaType ?? null),
         additional_seva_date: additionalSevaDate ?? null,
-        additional_seva_amount: additionalSevaPrice > 0 ? additionalSevaPrice : null,
+        additional_seva_amount: additionalSevaPackageId ? null : (additionalSevaPrice > 0 ? additionalSevaPrice : null),
+        additional_seva_package_id: additionalSevaPackageId ?? null,
         total_amount: totalAmount,
       })
       .select('*')
@@ -319,13 +347,14 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
       }
 
       // 6c. Insert Linked Seva Booking (for single source of truth availability)
-      if (additionalSevaType && additionalSevaType !== 'none' && additionalSevaDate) {
+      if ((additionalSevaPackageId || additionalSevaType) && (additionalSevaPackageId !== 'none' && additionalSevaType !== 'none') && additionalSevaDate) {
         const sevaRef = `SEV-${bookingReference}`
-        const sevaBookingType = additionalSevaType === 'guruji_aarti' ? 'yajman' : 'yajman'
+        const sevaBookingType = resolvedSevaType === 'guruji_aarti' ? 'yajman' : (resolvedSevaType || 'yajman')
         await supabaseAdmin.from('seva_bookings').insert({
           booking_reference: sevaRef,
           user_id: authRequest.userId,
           seva_type: sevaBookingType,
+          seva_package_id: additionalSevaPackageId ?? null,
           seva_date: additionalSevaDate,
           full_name: leadPassenger.fullName.trim(),
           phone_number: leadPassenger.phone.trim(),

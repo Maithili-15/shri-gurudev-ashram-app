@@ -172,8 +172,10 @@ Last updated: July 2026.
 - **Server-Side Total Re-validation**: Backend recalculates option prices directly from `travel_packages` table during booking creation to guarantee tamper-proof total amounts.
 - Seat reservation locks booking for 15 minutes (`expires_at`). Unpaid expired bookings are automatically cleaned up by `expire_stale_bookings()`.
 
-### Seva Booking & Dynamic Calendar Availability
-- Devotees sponsor full-day Mahaprasad (Nitya Annadan - ₹2,100, stored in MongoDB `NityaAnnadanBooking`) or Katha Sponsorship (Yajman - ₹5,100, stored in Supabase `seva_bookings`).
+### Seva Booking & Dynamic Seva Packages
+- Devotees sponsor full-day Mahaprasad (Nitya Annadan - stored in MongoDB `NityaAnnadanBooking`) or Katha Sponsorship (Yajman, Guruji Aarti - stored in Supabase `seva_bookings`).
+- **Dynamic Seva Packages**: Katha and Aarti seva prices and configurations (such as `is_active`, `booking_enabled`, `allow_date_selection`) are dynamically managed from the Admin Dashboard and stored in the `seva_packages` table (Supabase). The mobile app fetches their live pricing from `GET /api/public/seva-packages`.
+- **Nitya Annadan Pricing**: Nitya Annadan pricing is also dynamic but managed separately via the Donation Dashboard and stored in MongoDB, fetched via `GET /api/annadan/pricing`.
 - **Timezone-Safe Date Serialization**:
   - Interactive calendars serialize selected dates using local date component getters (`d.getFullYear()`, `d.getMonth() + 1`, `d.getDate()`) instead of `.toISOString()`. This prevents local midnight Date objects (e.g. `July 25 00:00:00 local IST`) from being converted to UTC previous-day strings (`2026-07-24`).
   - Date strings (`YYYY-MM-DD`) are formatted for UI display via `formatDateString()`, parsing year/month/day as local dates to guarantee zero off-by-one day shifts between calendar pickers, Zustand state, API payloads, MongoDB/Supabase database storage, and receipts across all client timezones.
@@ -240,11 +242,20 @@ Last updated: July 2026.
 | `GET` | `/health` | Production health check & database latency check |
 | `GET` | `/api/packages` | List active travel packages with remaining seats & option pricing |
 | `GET` | `/api/packages/:id` | Get details for a specific travel package |
-| `GET` | `/api/seva/pricing` | Fetch dynamic Yajman Seva price |
+| `GET` | `/api/public/seva-packages` | List active seva packages with pricing and configurations |
 | `GET` | `/api/seva/availability` | Fetch month-wise Yajman date availability (`?type=yajman&month=YYYY-MM`) |
 | `GET` | `/api/seva/:type/availability` | Fetch single-date or monthly availability for Yajman Seva |
 | `POST` | `/api/auth/verify-firebase-token` | Exchange Firebase ID token for Travel JWT |
 | `POST` | `/api/payments/webhook` | Razorpay webhook listener (deduplicated) |
+
+#### Admin Endpoints (Requires `Authorization: Bearer <Admin_JWT>`)
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/api/admin/seva-packages` | List all seva packages (including inactive) |
+| `POST` | `/api/admin/seva-packages` | Create a new seva package |
+| `PUT` | `/api/admin/seva-packages/:id` | Update a seva package |
+| `PUT` | `/api/admin/seva-packages/:id/status` | Update seva package status |
+| `DELETE` | `/api/admin/seva-packages/:id` | Soft delete a seva package |
 
 #### Protected Endpoints (Requires `Authorization: Bearer <Travel_JWT>`)
 | Method | Route | Purpose |
@@ -349,6 +360,31 @@ CREATE TABLE public.travel_packages (
 );
 ```
 
+#### `seva_packages` Table
+```sql
+CREATE TABLE public.seva_packages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    seva_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    price NUMERIC NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    booking_enabled BOOLEAN NOT NULL DEFAULT true,
+    allow_date_selection BOOLEAN NOT NULL DEFAULT true,
+    max_bookings_per_day INTEGER,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    color TEXT,
+    icon TEXT,
+    category TEXT,
+    available_from DATE,
+    available_until DATE,
+    deleted_at TIMESTAMPTZ
+);
+```
+
 #### `bookings` Table
 ```sql
 CREATE TABLE public.bookings (
@@ -356,6 +392,7 @@ CREATE TABLE public.bookings (
     booking_reference TEXT NOT NULL UNIQUE,
     user_id UUID NOT NULL REFERENCES public.users(id),
     package_id UUID NOT NULL REFERENCES public.travel_packages(id),
+    additional_seva_package_id UUID REFERENCES public.seva_packages(id),
     status TEXT NOT NULL DEFAULT 'payment_pending',
     traveler_count INTEGER NOT NULL DEFAULT 1,
     total_amount NUMERIC NOT NULL,
@@ -400,6 +437,7 @@ CREATE TABLE public.seva_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_reference TEXT NOT NULL UNIQUE,
     user_id UUID NOT NULL REFERENCES public.users(id),
+    seva_package_id UUID REFERENCES public.seva_packages(id),
     seva_type TEXT NOT NULL, -- 'annadan' | 'yajman'
     seva_date DATE NOT NULL,
     full_name TEXT NOT NULL,

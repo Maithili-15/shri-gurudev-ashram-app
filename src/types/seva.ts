@@ -42,6 +42,7 @@ export type CreateSevaBookingInput = {
   phoneNumber: string;
   totalAmount: number;
   notes?: string;
+  sevaPackageId?: string;
   // ─── Annadan Redesign Fields ────────────────────────────────────────────────
   bookingPurpose?: AnnadanBookingPurpose;
   beneficiaryName?: string;
