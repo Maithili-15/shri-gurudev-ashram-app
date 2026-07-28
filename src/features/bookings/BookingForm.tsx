@@ -94,14 +94,24 @@ function SevaInlineCalendar({
   selectedIso,
   onSelectDate,
   sevaTitle,
+  minDate,
+  maxDate,
 }: {
   selectedIso: string
   onSelectDate: (isoDate: string) => void
   sevaTitle: string
+  minDate?: string
+  maxDate?: string
 }) {
   const today = new Date()
-  const [viewYear, setViewYear] = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [viewYear, setViewYear] = useState(() => {
+    if (minDate) return Number(minDate.split('-')[0])
+    return today.getFullYear()
+  })
+  const [viewMonth, setViewMonth] = useState(() => {
+    if (minDate) return Number(minDate.split('-')[1]) - 1
+    return today.getMonth()
+  })
   const [monthlyAvailability, setMonthlyAvailability] = useState<Record<string, { available: boolean }>>({})
   const [loading, setLoading] = useState(false)
 
@@ -115,17 +125,40 @@ function SevaInlineCalendar({
   }, [viewYear, viewMonth])
 
   const cells = buildCalendarGrid(viewYear, viewMonth)
-  const isPast = (d: Date) => {
-    const check = new Date(d); check.setHours(0,0,0,0)
+  const isPastOrOutOfBounds = (date: Date, iso: string) => {
+    const check = new Date(date); check.setHours(0,0,0,0)
     const t = new Date(today); t.setHours(0,0,0,0)
-    return check < t
+    if (check < t) return true
+    if (minDate && iso < minDate) return true
+    if (maxDate && iso > maxDate) return true
+    return false
+  }
+
+  const canPrevMonth = () => {
+    if (!minDate) return true
+    const minYear = Number(minDate.split('-')[0])
+    const minMonth = Number(minDate.split('-')[1]) - 1
+    if (viewYear < minYear) return false
+    if (viewYear === minYear && viewMonth <= minMonth) return false
+    return true
+  }
+
+  const canNextMonth = () => {
+    if (!maxDate) return true
+    const maxYear = Number(maxDate.split('-')[0])
+    const maxMonth = Number(maxDate.split('-')[1]) - 1
+    if (viewYear > maxYear) return false
+    if (viewYear === maxYear && viewMonth >= maxMonth) return false
+    return true
   }
 
   const prevMonth = () => {
+    if (!canPrevMonth()) return
     if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }
     else setViewMonth((m) => m - 1)
   }
   const nextMonth = () => {
+    if (!canNextMonth()) return
     if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0) }
     else setViewMonth((m) => m + 1)
   }
@@ -134,11 +167,11 @@ function SevaInlineCalendar({
     <View style={styles.inlineCalBox}>
       <Text style={styles.inlineCalHeader}>Select {sevaTitle} Date</Text>
       <View style={styles.inlineMonthNav}>
-        <TouchableOpacity onPress={prevMonth} style={styles.inlineNavBtn}>
+        <TouchableOpacity onPress={prevMonth} style={[styles.inlineNavBtn, !canPrevMonth() && { opacity: 0.3 }]}>
           <MaterialIcons name="chevron-left" size={22} color="#8B5A00" />
         </TouchableOpacity>
         <Text style={styles.inlineMonthLabel}>{MONTHS[viewMonth]} {viewYear}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.inlineNavBtn}>
+        <TouchableOpacity onPress={nextMonth} style={[styles.inlineNavBtn, !canNextMonth() && { opacity: 0.3 }]}>
           <MaterialIcons name="chevron-right" size={22} color="#8B5A00" />
         </TouchableOpacity>
       </View>
@@ -157,12 +190,12 @@ function SevaInlineCalendar({
         <View style={styles.inlineGrid}>
           {cells.map((date, i) => {
             if (!date) return <View key={`empty-${i}`} style={styles.inlineCell} />
-            const iso = date.toISOString().split('T')[0]
-            const past = isPast(date)
+            const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+            const disabledDate = isPastOrOutOfBounds(date, iso)
             const isSelected = iso === selectedIso
             const dayInfo = monthlyAvailability[iso]
-            const booked = past ? false : (dayInfo ? !dayInfo.available : false)
-            const dotColor = past ? '#C04545' : booked ? '#E65C00' : '#2F7132'
+            const booked = disabledDate ? false : (dayInfo ? !dayInfo.available : false)
+            const dotColor = disabledDate ? '#C04545' : booked ? '#E65C00' : '#2F7132'
 
             return (
               <TouchableOpacity
@@ -170,16 +203,16 @@ function SevaInlineCalendar({
                 style={[
                   styles.inlineCell,
                   isSelected && styles.inlineCellSelected,
-                  (past || booked) && styles.inlineCellPast,
+                  (disabledDate || booked) && styles.inlineCellPast,
                 ]}
-                disabled={past || booked}
+                disabled={disabledDate || booked}
                 onPress={() => onSelectDate(iso)}
                 activeOpacity={0.75}
               >
                 <Text style={[
                   styles.inlineCellText,
                   isSelected && styles.inlineCellTextSelected,
-                  (past || booked) && styles.inlineCellTextPast,
+                  (disabledDate || booked) && styles.inlineCellTextPast,
                 ]}>
                   {date.getDate()}
                 </Text>
@@ -875,9 +908,10 @@ export default function BookingForm() {
                               setAddonService(null)
                             } else {
                               const todayIso = new Date().toISOString().split('T')[0]
+                              const defaultSevaDate = selectedPackage?.startDate && selectedPackage.startDate >= todayIso ? selectedPackage.startDate : todayIso
                               setAddonService({
                                 type: option.value as 'guruji_aarti' | 'yajman_pad',
-                                bookingDate: addonService?.type === option.value ? addonService.bookingDate : todayIso,
+                                bookingDate: addonService?.type === option.value ? addonService.bookingDate : defaultSevaDate,
                                 amount: option.price,
                               })
                             }
@@ -887,6 +921,8 @@ export default function BookingForm() {
                           <SevaInlineCalendar
                             selectedIso={addonService?.bookingDate ?? ''}
                             sevaTitle={option.title}
+                            minDate={selectedPackage?.startDate}
+                            maxDate={selectedPackage?.endDate}
                             onSelectDate={(isoDate) => {
                               if (addonService) {
                                 setAddonService({ ...addonService, bookingDate: isoDate })

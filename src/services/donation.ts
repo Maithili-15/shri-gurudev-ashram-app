@@ -19,6 +19,11 @@ export const createDonationOrder = async (id: string) => {
   return data
 }
 
+export const verifyDonationPayment = async (body: { donationId?: string; razorpayOrderId?: string; razorpayPaymentId: string; razorpaySignature: string }) => {
+  const { data } = await donationApi.post('/api/donations/verify-payment', body)
+  return data
+}
+
 export const getDonationStatus = async (id: string) => {
   try {
     const { data } = await donationApi.get(`/api/donations/${id}/status`)

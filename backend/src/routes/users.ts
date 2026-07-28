@@ -1,9 +1,12 @@
+import path from "path";
+import fs from "fs";
 import { Router } from "express";
 import { HttpError } from "../errors";
-import { AuthenticatedRequest, requireAuth } from "../middleware/auth";
-import { upload } from "../middleware/upload";
+import { AuthenticatedRequest, requireAuth, requireAdmin } from "../middleware/auth";
+import { profileImageUpload, upload } from "../middleware/upload";
 import { supabaseAdmin } from "../services/supabaseAdmin";
 import { createNotification } from "../services/notifications";
+import { NotificationType } from "../constants/notifications";
 
 export const usersRouter = Router();
 
@@ -28,23 +31,9 @@ usersRouter.put("/me", requireAuth, async (request, response, next) => {
     if (typeof body.fullName === "string")
       updates.full_name = body.fullName.trim();
     if (typeof body.phone === "string" || typeof body.phoneNumber === "string")
-      updates.phone_number = (body.phone || body.phoneNumber).trim();
-    if (typeof body.whatsappNumber === "string")
-      updates.whatsapp_number = body.whatsappNumber.trim();
+      updates.phone = (body.phone || body.phoneNumber).trim();
     if (typeof body.email === "string")
       updates.email = body.email.trim();
-    if (typeof body.dob === "string")
-      updates.dob = body.dob.trim();
-    if (typeof body.gender === "string")
-      updates.gender = body.gender.trim();
-    if (typeof body.address === "string")
-      updates.address = body.address.trim();
-    if (typeof body.emergencyContactName === "string")
-      updates.emergency_contact_name = body.emergencyContactName.trim();
-    if (typeof body.emergencyContactPhone === "string")
-      updates.emergency_contact_phone = body.emergencyContactPhone.trim();
-    if (typeof body.emergencyContactRelation === "string")
-      updates.emergency_contact_relation = body.emergencyContactRelation.trim();
     if ("profileImageUrl" in body && (body.profileImageUrl === null || typeof body.profileImageUrl === "string"))
       updates.profile_image_url = body.profileImageUrl;
     if (typeof body.pushToken === "string")
@@ -188,57 +177,82 @@ usersRouter.post(
 usersRouter.post(
   "/upload-profile-image",
   requireAuth,
-  upload.single("profileImage"),
+  profileImageUpload.single("profileImage"),
   async (request, response, next) => {
-    const fs = require('fs');
-    const authRequest = request as AuthenticatedRequest & {
-      file?: Express.Multer.File;
-    };
-
-    if (!authRequest.file) {
-      next(new HttpError(400, "No image file provided"));
-      return;
-    }
-
-    const filePath = authRequest.file.path;
-
     try {
-      const fileBuffer = fs.readFileSync(filePath);
-      const ext = authRequest.file.originalname.split('.').pop() || 'jpg';
-      const path = `${authRequest.userId}/${Date.now()}.${ext}`;
+      const authRequest = request as AuthenticatedRequest & {
+        file?: Express.Multer.File;
+      };
 
-      const { error } = await supabaseAdmin.storage
-        .from('profile-images')
-        .upload(path, fileBuffer, {
-          contentType: authRequest.file.mimetype,
-          upsert: true,
-        });
+      if (!authRequest.file) {
+        throw new HttpError(400, "No image file provided");
+      }
+
+      const relativePath = `/uploads/profile-images/${authRequest.userId}/${authRequest.file.filename}`;
+
+      const { error } = await supabaseAdmin
+        .from("users")
+        .update({ profile_image_url: relativePath })
+        .eq("id", authRequest.userId);
 
       if (error) {
-        const isBucketMissing = error.message?.toLowerCase().includes('not found') || (error as any).status === 404;
-        throw new HttpError(
-          500,
-          isBucketMissing
-            ? "Storage bucket 'profile-images' is missing or unconfigured."
-            : error.message
-        );
+        throw new HttpError(400, error.message ?? "Could not update user profile image URL");
       }
 
-      const { data } = supabaseAdmin.storage
-        .from('profile-images')
-        .getPublicUrl(path);
-
-      response.status(200).json({ publicUrl: data.publicUrl });
+      response.status(200).json({
+        publicUrl: relativePath,
+        path: relativePath,
+        url: relativePath,
+      });
     } catch (error) {
       next(error);
-    } finally {
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (_) {}
-      }
     }
-  }
+  },
+);
+
+usersRouter.get(
+  "/verifications/document",
+  requireAuth,
+  async (request, response, next) => {
+    try {
+      const authRequest = request as AuthenticatedRequest & { userRole?: string };
+      const rawPath = String(request.query.path || request.query.filepath || "");
+      if (!rawPath) throw new HttpError(400, "Document path parameter is required");
+
+      const baseDir = path.resolve(process.cwd(), "uploads", "verifications");
+      const targetPath = path.resolve(process.cwd(), rawPath);
+
+      // Prevent path traversal
+      if (!targetPath.startsWith(baseDir)) {
+        throw new HttpError(403, "Access denied: invalid document path");
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        throw new HttpError(404, "Verification document not found");
+      }
+
+      // Check owner or admin
+      const isOwner = authRequest.userId && targetPath.includes(path.join("uploads", "verifications", authRequest.userId));
+      const isAdmin = authRequest.userRole && ["admin", "WEBSITE_ADMIN", "SYSTEM_ADMIN"].includes(authRequest.userRole);
+
+      if (!isOwner && !isAdmin) {
+        // Double check admin role from DB if not already set on request
+        const { data: user } = await supabaseAdmin
+          .from("users")
+          .select("role")
+          .eq("id", authRequest.userId)
+          .maybeSingle();
+
+        if (!user || !["admin", "WEBSITE_ADMIN", "SYSTEM_ADMIN"].includes(user.role)) {
+          throw new HttpError(403, "Forbidden access to verification document");
+        }
+      }
+
+      response.sendFile(targetPath);
+    } catch (error) {
+      next(error);
+    }
+  },
 );
 
 usersRouter.post(
@@ -247,13 +261,9 @@ usersRouter.post(
   async (request, response, next) => {
     try {
       const {
-        identityType = "aadhaar",
         aadhaarNumber,
         aadhaarImagePath,
-        aadhaarBackImagePath,
         selfieImagePath,
-        panNumber,
-        panImagePath,
       } = request.body as SubmitVerificationBody;
 
       const authRequest = request as AuthenticatedRequest;
@@ -280,42 +290,22 @@ usersRouter.post(
         throw new HttpError(409, "Verification has already been submitted");
       }
 
-      const updatePayload: Record<string, any> = {
-        identity_type: identityType,
-        verification_status: "submitted",
-      };
-
-      if (identityType === "pan") {
-        if (!panNumber || typeof panNumber !== "string" || !/^[A-Z]{5}\d{4}[A-Z]$/.test(panNumber.trim().toUpperCase())) {
-          throw new HttpError(400, "Valid PAN number is required (format: ABCDE1234F)");
-        }
-        if (!panImagePath || typeof panImagePath !== "string" || !panImagePath.trim()) {
-          throw new HttpError(400, "panImagePath is required");
-        }
-
-        const cleanPan = panNumber.trim().toUpperCase();
-        updatePayload.pan_number = cleanPan;
-        updatePayload.pan_image_path = panImagePath.trim();
-        updatePayload.identity_number_masked = `XXXXX${cleanPan.slice(-4)}`;
-      } else {
-        // Aadhaar
-        if (!aadhaarNumber || typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.trim())) {
-          throw new HttpError(400, "aadhaarNumber must be exactly 12 numeric digits");
-        }
-        if (!aadhaarImagePath || typeof aadhaarImagePath !== "string" || !aadhaarImagePath.trim()) {
-          throw new HttpError(400, "aadhaarImagePath is required");
-        }
-        if (!selfieImagePath || typeof selfieImagePath !== "string" || !selfieImagePath.trim()) {
-          throw new HttpError(400, "selfieImagePath is required");
-        }
-
-        const cleanAadhaar = aadhaarNumber.trim();
-        updatePayload.aadhaar_number = cleanAadhaar;
-        updatePayload.aadhaar_image_path = aadhaarImagePath.trim();
-        if (aadhaarBackImagePath) updatePayload.aadhaar_back_image_path = aadhaarBackImagePath.trim();
-        updatePayload.selfie_image_path = selfieImagePath.trim();
-        updatePayload.identity_number_masked = `XXXX XXXX ${cleanAadhaar.slice(-4)}`;
+      if (!aadhaarNumber || typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.trim())) {
+        throw new HttpError(400, "aadhaarNumber must be exactly 12 numeric digits");
       }
+      if (!aadhaarImagePath || typeof aadhaarImagePath !== "string" || !aadhaarImagePath.trim()) {
+        throw new HttpError(400, "aadhaarImagePath is required");
+      }
+      if (!selfieImagePath || typeof selfieImagePath !== "string" || !selfieImagePath.trim()) {
+        throw new HttpError(400, "selfieImagePath is required");
+      }
+
+      const updatePayload = {
+        verification_status: "submitted",
+        aadhaar_number: aadhaarNumber.trim(),
+        aadhaar_image_path: aadhaarImagePath.trim(),
+        selfie_image_path: selfieImagePath.trim(),
+      };
 
       const { data: updatedUser, error: updateError } = await supabaseAdmin
         .from("users")
@@ -339,12 +329,12 @@ usersRouter.post(
 );
 
 // ─── Website Admin Verification Management ──────────────────────────────────
-usersRouter.get("/admin/verifications", requireAuth, async (request, response, next) => {
+usersRouter.get("/admin/verifications", requireAdmin, async (request, response, next) => {
   try {
     const status = request.query.status as string | undefined;
     let query = supabaseAdmin
       .from("users")
-      .select("id, full_name, phone_number, email, verification_status, identity_type, identity_number_masked, aadhaar_image_path, aadhaar_back_image_path, pan_image_path, selfie_image_path, review_notes, reviewed_by, reviewed_at, created_at")
+      .select("id, full_name, phone, email, verification_status, aadhaar_number, aadhaar_image_path, selfie_image_path, created_at")
       .order("created_at", { ascending: false });
 
     if (status) {
@@ -361,7 +351,7 @@ usersRouter.get("/admin/verifications", requireAuth, async (request, response, n
   }
 });
 
-usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async (request, response, next) => {
+usersRouter.post("/admin/verifications/:targetUserId/review", requireAdmin, async (request, response, next) => {
   try {
     const { targetUserId } = request.params;
     const { action, notes } = request.body ?? {};
@@ -370,16 +360,12 @@ usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async
       throw new HttpError(400, "Action must be 'approve' or 'reject'");
     }
 
-    const reviewerId = (request as AuthenticatedRequest).userId;
     const newStatus = action === "approve" ? "verified" : "rejected";
 
     const { data: updatedUser, error } = await supabaseAdmin
       .from("users")
       .update({
         verification_status: newStatus,
-        review_notes: notes ? String(notes).trim() : null,
-        reviewed_by: reviewerId,
-        reviewed_at: new Date().toISOString(),
       })
       .eq("id", targetUserId)
       .select("*")
@@ -392,9 +378,9 @@ usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async
     const userIdStr = String(targetUserId);
 
     if (newStatus === "verified") {
-      await createNotification(userIdStr, "Verification Approved", "Your identity verification has been approved by the Ashram administration.");
+      await createNotification(userIdStr, "Verification Approved", "Your identity verification has been approved by the Ashram administration.", NotificationType.VERIFICATION_APPROVED);
     } else {
-      await createNotification(userIdStr, "Verification Update", `Your identity verification status was updated to ${newStatus}.${notes ? ` Notes: ${notes}` : ""}`);
+      await createNotification(userIdStr, "Verification Update", `Your identity verification status was updated to ${newStatus}.${notes ? ` Notes: ${notes}` : ""}`, NotificationType.VERIFICATION_UPDATED);
     }
 
     response.json({ success: true, user: updatedUser });

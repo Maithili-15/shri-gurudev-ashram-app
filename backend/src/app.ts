@@ -3,6 +3,8 @@ import cors from 'cors'
 import express, { NextFunction, Request, Response } from 'express'
 import helmet from 'helmet'
 import { HttpError } from './errors'
+import fs from 'fs'
+import path from 'path'
 import { connectDonationDatabases, mainDb } from './services/mongo'
 import { supabaseAdmin } from './services/supabaseAdmin'
 import { bookingsRouter } from './routes/bookings'
@@ -115,7 +117,19 @@ app.get('/api/user/donations', requireDonationAuth, async (request, response, ne
     await userDonations(request, response, next)
   } catch (error) { next(error) }
 })
-app.use('/receipts', express.static('backend/receipts'))
+const canonicalReceiptDir = path.resolve(
+  path.basename(process.cwd()) === 'backend' ? process.cwd() : path.join(process.cwd(), 'backend'),
+  'receipts'
+)
+fs.mkdirSync(canonicalReceiptDir, { recursive: true })
+app.use('/receipts', express.static(canonicalReceiptDir))
+const profileUploadsDir = path.resolve(
+  path.basename(process.cwd()) === 'backend' ? process.cwd() : path.join(process.cwd(), 'backend'),
+  'uploads',
+  'profile-images'
+)
+fs.mkdirSync(profileUploadsDir, { recursive: true })
+app.use('/uploads/profile-images', express.static(profileUploadsDir))
 
 export async function connectAppDatabases() {
   await connectDonationDatabases()

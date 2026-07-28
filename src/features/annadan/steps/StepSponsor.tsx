@@ -19,7 +19,10 @@ type StepSponsorProps = {
   onBack: () => void
 }
 
+import { useAuthStore } from '../../../store/useAuthStore'
+
 export default function StepSponsor({ onNext, onBack: _onBack }: StepSponsorProps) {
+  const user = useAuthStore((s) => s.user)
   const sponsorName = useSevaStore((s) => s.sponsorName)
   const sponsorPhone = useSevaStore((s) => s.sponsorPhone)
   const sponsorEmail = useSevaStore((s) => s.sponsorEmail)
@@ -31,6 +34,15 @@ export default function StepSponsor({ onNext, onBack: _onBack }: StepSponsorProp
 
   // Also populate fullName and phoneNumber for backward compat with the booking API
   const updateDevoteeField = useSevaStore((s) => s.updateDevoteeField)
+
+  React.useEffect(() => {
+    if (user) {
+      if (!sponsorName && user.fullName) setSponsorName(user.fullName)
+      if (!sponsorPhone && user.phone) setSponsorPhone(user.phone)
+      if (!useSevaStore.getState().fullName && user.fullName) updateDevoteeField('fullName', user.fullName)
+      if (!useSevaStore.getState().phoneNumber && user.phone) updateDevoteeField('phoneNumber', user.phone)
+    }
+  }, [user])
 
   const [touched, setTouched] = useState({ name: false, phone: false, email: false })
 

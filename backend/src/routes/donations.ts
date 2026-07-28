@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { optionalDonationAuth, requireDonationAuth } from '../middleware/donationAuth'
-import { createDonation, createDonationOrder, donationReceipt, donationStatus, lastProfile, userDonations } from '../controllers/donations'
+import { createDonation, createDonationOrder, donationReceipt, donationStatus, lastProfile, userDonations, verifyDonationPayment } from '../controllers/donations'
 import { collectorDashboard, leaderboard } from '../controllers/collector'
 
 import rateLimit from 'express-rate-limit'
@@ -12,6 +12,7 @@ const statusLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: 
 
 donationsRouter.post('/create', createLimiter, optionalDonationAuth, createDonation)
 donationsRouter.post('/create-order', createLimiter, optionalDonationAuth, createDonationOrder)
+donationsRouter.post('/verify-payment', createLimiter, optionalDonationAuth, verifyDonationPayment)
 donationsRouter.get('/:id/status', statusLimiter, donationStatus)
 donationsRouter.get('/:id/receipt', statusLimiter, donationReceipt)
 donationsRouter.get('/me/last-profile', requireDonationAuth, lastProfile)

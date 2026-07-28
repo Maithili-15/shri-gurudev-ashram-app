@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
 import { createNotification } from '../services/notifications'
+import { NotificationType } from '../constants/notifications'
 import { razorpay, razorpayKeySecret } from '../services/razorpay'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { logError, logInfo } from '../utils/logger'
@@ -310,6 +311,21 @@ paymentsRouter.post('/verify-seva', requireAuth, async (request, response, next)
       return
     }
 
+    const { data: duplicateSeva, error: duplicateSevaError } = await supabaseAdmin
+      .from('seva_bookings')
+      .select('id')
+      .eq('razorpay_payment_id', razorpay_payment_id)
+      .neq('id', bookingId)
+      .maybeSingle()
+
+    if (duplicateSevaError) {
+      throw new HttpError(500, duplicateSevaError.message)
+    }
+
+    if (duplicateSeva) {
+      throw new HttpError(409, 'Razorpay payment has already been processed')
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from('seva_bookings')
       .update({
@@ -398,7 +414,7 @@ async function captureBookingPayment(input: {
   try {
     const { data: booking } = await supabaseAdmin.from('bookings').select('*').eq('id', input.bookingId).maybeSingle()
     if (booking?.user_id) {
-      await createNotification(booking.user_id, 'Payment Successful', `Your payment for Yatra booking reference ${booking.booking_reference} was successful. Jai Shri Gurudev!`)
+      await createNotification(booking.user_id, 'Payment Successful', `Your payment for Yatra booking reference ${booking.booking_reference} was successful. Jai Shri Gurudev!`, NotificationType.BOOKING_CONFIRMED)
     }
     if (booking?.booking_reference) {
       const { data: existingSeva } = await supabaseAdmin

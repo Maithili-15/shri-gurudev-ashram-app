@@ -2,8 +2,20 @@ export function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+export function normalizePhoneNumber(value: string): string {
+  if (!value) return '';
+  let cleaned = value.replace(/[^\d]/g, '');
+  if (cleaned.length === 12 && cleaned.startsWith('91')) {
+    cleaned = cleaned.slice(2);
+  } else if (cleaned.length === 11 && cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+  return cleaned.slice(0, 10);
+}
+
 export function isValidPhoneNumber(value: string) {
-  return /^\d{10}$/.test(value.trim());
+  const normalized = normalizePhoneNumber(value);
+  return /^[6-9]\d{9}$/.test(normalized);
 }
 
 export function isValidAadhaarNumber(value: string) {
@@ -12,8 +24,8 @@ export function isValidAadhaarNumber(value: string) {
 
 export function normalizeDigits(value: string, maxLength: number) {
   let cleaned = value.replace(/[^\d]/g, "");
-  if (maxLength === 10 && cleaned.length > 10 && cleaned.startsWith('91')) {
-    cleaned = cleaned.slice(2);
+  if (maxLength === 10) {
+    return normalizePhoneNumber(cleaned);
   }
   return cleaned.slice(0, maxLength);
 }

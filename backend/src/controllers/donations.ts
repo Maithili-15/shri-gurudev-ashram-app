@@ -38,13 +38,14 @@ async function canonicalHead(input: any) {
 function validateDonor(donor: any) {
   const addressObj = donor?.addressObj
   const address = text(donor?.address) || [addressObj?.line, addressObj?.city, addressObj?.state, addressObj?.country, addressObj?.pincode].filter(Boolean).join(', ')
-  if (!text(donor?.name) || !text(donor?.mobile) || !address || !text(donor?.dob) || text(donor?.idType) !== 'PAN' || !text(donor?.idNumber)) throw new HttpError(400, 'Missing required donor details')
+  const idType = text(donor?.idType) || 'PAN'
+  if (!text(donor?.name) || !text(donor?.mobile) || !address || !text(donor?.dob) || idType !== 'PAN' || !text(donor?.idNumber)) throw new HttpError(400, 'Missing required donor details')
   if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(text(donor.idNumber).toUpperCase())) throw new HttpError(400, 'Invalid PAN number format')
   const dob = new Date(donor.dob)
   if (Number.isNaN(dob.getTime())) throw new HttpError(400, 'Invalid date of birth')
   const today = new Date(); let age = today.getFullYear() - dob.getFullYear(); const month = today.getMonth() - dob.getMonth(); if (month < 0 || (month === 0 && today.getDate() < dob.getDate())) age -= 1
   if (age < 18) throw new HttpError(400, 'Donor must be 18 years or older')
-  return { ...donor, name: text(donor.name), mobile: text(donor.mobile), idNumber: text(donor.idNumber).toUpperCase(), address, dob }
+  return { ...donor, name: text(donor.name), mobile: text(donor.mobile), idType, idNumber: text(donor.idNumber).toUpperCase(), address, dob }
 }
 
 export async function createDonation(request: Request, response: Response, next: NextFunction) {
@@ -87,6 +88,66 @@ export async function createDonationOrder(request: Request, response: Response, 
     const order = await razorpay.orders.create({ amount: Math.round(donation.amount * 100), currency: 'INR', receipt: String(donation._id).slice(-12) })
     donation.razorpayOrderId = order.id; await donation.save()
     response.json({ razorpayOrderId: order.id, amount: order.amount, currency: order.currency, key: process.env.RAZORPAY_KEY_ID })
+  } catch (error) { next(error) }
+}
+
+export async function verifyDonationPayment(request: Request, response: Response, next: NextFunction) {
+  try {
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, donationId } = request.body ?? {}
+    if ((!donationId && !razorpayOrderId) || !razorpayPaymentId || !razorpaySignature) {
+      throw new HttpError(400, 'Missing payment verification fields')
+    }
+
+    const query = donationId ? { _id: objectId(String(donationId)) } : { razorpayOrderId: String(razorpayOrderId) }
+    const donation = await Donation.findOne(query)
+    if (!donation) throw new HttpError(404, 'Donation record not found')
+
+    const authUser = (request as DonationRequest).donationUser
+    if (authUser && donation.user && String(donation.user) !== authUser.id) {
+      throw new HttpError(403, 'Donation does not belong to the authenticated user')
+    }
+
+    if (donation.status === 'SUCCESS') {
+      return response.json({
+        success: true,
+        status: donation.status,
+        donationId: donation._id,
+        receiptNumber: donation.receiptNumber,
+        receiptUrl: donation.receiptUrl,
+      })
+    }
+
+    const orderIdToVerify = razorpayOrderId || donation.razorpayOrderId
+    const secret = process.env.RAZORPAY_KEY_SECRET!
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${orderIdToVerify}|${razorpayPaymentId}`)
+      .digest('hex')
+
+    const isSignatureValid = expectedSignature.length === String(razorpaySignature).length &&
+      crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(String(razorpaySignature)))
+
+    if (!isSignatureValid) {
+      throw new HttpError(400, 'Invalid payment signature')
+    }
+
+    donation.status = 'SUCCESS'
+    donation.paymentId = razorpayPaymentId
+    donation.transactionRef = razorpayPaymentId
+    if (!donation.receiptNumber) {
+      donation.receiptNumber = `GRD-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`
+    }
+    const filePath = await generateReceipt(donation)
+    donation.receiptUrl = publicReceiptUrl(filePath)
+    await donation.save()
+
+    response.json({
+      success: true,
+      status: donation.status,
+      donationId: donation._id,
+      receiptNumber: donation.receiptNumber,
+      receiptUrl: donation.receiptUrl,
+    })
   } catch (error) { next(error) }
 }
 

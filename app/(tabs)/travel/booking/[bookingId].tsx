@@ -179,6 +179,40 @@ export default function BookingDetailsRoute() {
           <SummaryTile label="Payment" value={formatStatus(booking.status)} icon="verified-user" />
         </View>
 
+        {/* Linked Seva Section */}
+        {booking.linkedSeva || (booking.additionalSevaType && booking.additionalSevaType !== 'none') ? (
+          <View style={{
+            backgroundColor: '#FFF5E1',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: '#F0E7DD',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="self-improvement" size={20} color="#B97512" />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#2B231B' }}>
+                  {booking.linkedSeva?.sevaType === 'guruji_aarti' || booking.additionalSevaType === 'guruji_aarti'
+                    ? 'Guruji Aarti Seva'
+                    : 'Yajman Pad Booking'}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: '#2F713214', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#2F7132' }}>
+                  {booking.linkedSeva?.status === 'paid' || booking.status === 'paid' ? 'Confirmed' : 'Pending'}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 13, color: '#7E7162', marginBottom: 2 }}>
+              📅 Seva Date: {formatDate(booking.linkedSeva?.sevaDate ?? booking.additionalSevaDate ?? '')}
+            </Text>
+            <Text style={{ fontSize: 13, color: '#7E7162' }}>
+              💰 Seva Amount: ₹{(booking.linkedSeva?.totalAmount ?? booking.additionalSevaAmount ?? 0).toLocaleString('en-IN')}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
           <Pressable style={styles.primaryButton} onPress={() => router.push(`/(tabs)/travel/booking-status/${booking.id}` as never)}>
             <Text style={styles.primaryButtonText}>View Status</Text>

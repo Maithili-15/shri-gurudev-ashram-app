@@ -27,16 +27,26 @@ function formatDateString(isoStr?: string): string {
   return localDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+import { useAuthStore } from '../../../../src/store/useAuthStore'
+
 export default function YajmanDetailsRoute() {
   const router = useRouter()
   const params = useLocalSearchParams<{ type?: string }>()
   const isAartiMode = params.type === 'aarti'
   const insets = useSafeAreaInsets()
 
+  const user = useAuthStore((s) => s.user)
   const fullName = useSevaStore((s) => s.fullName)
   const phoneNumber = useSevaStore((s) => s.phoneNumber)
   const updateDevoteeField = useSevaStore((s) => s.updateDevoteeField)
   const selectedDate = useSevaStore((s) => s.selectedDate)
+
+  React.useEffect(() => {
+    if (user) {
+      if (!fullName && user.fullName) updateDevoteeField('fullName', user.fullName)
+      if (!phoneNumber && user.phone) updateDevoteeField('phoneNumber', user.phone)
+    }
+  }, [user])
 
   const [touched, setTouched] = useState({ fullName: false, phoneNumber: false })
 

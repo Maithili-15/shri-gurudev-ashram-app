@@ -1,786 +1,248 @@
-# IMPLEMENTATION.md — Shri Gurudev Ashram App
+# IMPLEMENTATION.md
 
-**This document is the single source of truth for the Shri Gurudev Ashram platform implementation.**
-Last updated: July 2026.
+## Objective
 
----
+Perform a comprehensive production-readiness audit of the entire Shri Gurudev Ashram platform.
 
-## Table of Contents
+This sprint is **audit only**.
 
-1. [Project Overview](#1-project-overview)
-2. [Architecture](#2-architecture)
-   - [Frontend Architecture](#frontend-architecture)
-   - [Backend Architecture](#backend-architecture)
-   - [Authentication Flow](#authentication-flow)
-   - [Database Architecture](#database-architecture)
-   - [Payment Flow](#payment-flow)
-   - [Notification Flow](#notification-flow)
-3. [Feature Modules](#3-feature-modules)
-   - [Authentication & Onboarding](#authentication--onboarding)
-   - [User Profile & Identity Verification](#user-profile--identity-verification)
-   - [Travel Packages & Dynamic Option Pricing](#travel-packages--dynamic-option-pricing)
-   - [Travel Booking Pipeline](#travel-booking-pipeline)
-   - [Seva Booking & Dynamic Calendar Availability](#seva-booking--dynamic-calendar-availability)
-   - [Donations & 80G Receipts](#donations--80g-receipts)
-   - [Payments & Order Life Cycle](#payments--order-life-cycle)
-   - [Receipts & Documentation](#receipts--documentation)
-   - [Notifications System](#notifications-system)
-   - [Collector Program](#collector-program)
-   - [Health & Diagnostics API](#health--diagnostics-api)
-4. [API Endpoints Reference](#4-api-endpoints-reference)
-   - [Travel & Seva Backend (Express + Supabase PostgreSQL)](#travel--seva-backend-express--supabase-postgresql)
-   - [Donation Backend (Express + MongoDB)](#donation-backend-express--mongodb)
-5. [Database Schema Reference](#5-database-schema-reference)
-   - [PostgreSQL (Supabase) Schema](#postgresql-supabase-schema)
-   - [MongoDB Schema](#mongodb-schema)
-6. [Security Implementation](#6-security-implementation)
-   - [Firebase & Dual JWT Token Model](#firebase--dual-jwt-token-model)
-   - [Razorpay Signature & Idempotency](#razorpay-signature--idempotency)
-   - [Ownership & Data Isolation](#ownership--data-isolation)
-   - [Seat Lock & Booking Expiry](#seat-lock--booking-expiry)
-   - [Rate Limiting & Input Validation](#rate-limiting--input-validation)
-7. [Production Deployment & Infrastructure](#7-production-deployment--infrastructure)
-   - [Health Monitoring](#health-monitoring)
-   - [Environment Variables](#environment-variables)
-   - [VPS, PM2 & Nginx Setup](#vps-pm2--nginx-setup)
-8. [Decision Log](#8-decision-log)
+Do **not** implement fixes while auditing.
+
+The objective is to identify every architectural, functional, security, database, and maintainability issue before production.
 
 ---
 
-## 1. Project Overview
+# Phase A – Architecture Audit
 
-**Shri Gurudev Ashram App** is a unified cross-platform mobile application for pilgrims and devotees. It enables devotional travel (Yatra) bookings, daily Annadan and Yajman Seva sponsorships, general donations with 80G tax benefits, and a donor referral (Collector) program.
+## A1. Project Architecture
 
-### Technology Stack Summary
+Review the complete architecture.
 
-| Component | Stack / Technologies |
-|---|---|
-| **Mobile App** | Expo SDK 56, React Native, Expo Router, TypeScript, Zustand, React Query, Reanimated |
-| **Travel & Seva Backend** | Express, Node.js, TypeScript, PostgreSQL via Supabase Admin SDK |
-| **Donation Backend** | Express, Node.js, Mongoose, MongoDB (`mainDb` + `sharedDb`) |
-| **Identity Provider** | Firebase Phone Authentication (`@react-native-firebase/auth`) |
-| **Payments Gateway** | Razorpay (Server-side HMAC-SHA256 signature verification & Webhooks) |
-| **Storage** | Supabase Storage (`profile-images`, `passenger-documents`) |
+Verify:
 
----
+- Backend responsibilities
+- Mobile architecture
+- Database ownership
+- MongoDB ↔ PostgreSQL boundaries
+- Service separation
+- Dependency direction
+- Circular dependencies
+- Duplicate business logic
 
-## 2. Architecture
+Deliverable:
 
-```
-                               ┌───────────────────────────────────┐
-                               │           Mobile App              │
-                               │      (Expo SDK 56 / TS / React)   │
-                               │  Two API clients (Travel & Donor) │
-                               └─────────────────┬─────────────────┘
-                                                 │
-                                Firebase Phone Authentication
-                                                 │
-                                     Firebase ID Token
-                                                 │
-                   ┌─────────────────────────────┴─────────────────────────────┐
-                   ▼                                                           ▼
-       ┌───────────────────────┐                                 ┌───────────────────────────┐
-       │  Travel & Seva Server │                                 │      Donation Server      │
-       │     (Port 3000)       │                                 │        (Port 3001)        │
-       │   Express + TS + PG   │                                 │      Express + MongoDB     │
-       └───────────┬───────────┘                                 └─────────────┬─────────────┘
-                   │                                                           │
-                   ▼                                                           ▼
-       ┌───────────────────────┐                                 ┌───────────────────────────┐
-       │ Supabase PostgreSQL   │                                 │      MongoDB Databases    │
-       │ users, travel_packages│                                 │  mainDb: User, Donation   │
-       │ bookings, passengers  │                                 │  sharedDb: DonationHead   │
-       │ seva_bookings, etc.   │                                 └───────────────────────────┘
-       └───────────────────────┘
-```
-
-### Frontend Architecture
-- **Navigation & Routing**: File-based routing via `expo-router` under `app/`. Auth-gated groups (`(auth)`, `(tabs)`).
-- **State Management**: Zustand stores (`useAuthStore`, `useSevaStore`, `useBookingStore`) managing local reactive state and session hydration.
-- **API Clients**: Two isolated Axios instances:
-  1. `api` (`src/api/axiosClient.ts`): Communicates with the Travel/Seva Backend. Attaches the Travel JWT.
-  2. `donationApi` (`src/api/donationAxiosClient.ts`): Communicates with the Donation Backend. Attaches the Donation JWT.
-- **Dynamic Config**: Base URLs dynamically resolve via `src/utils/config.ts` (`process.env.EXPO_PUBLIC_API_BASE_URL` or Metro `hostUri` in `__DEV__`).
-
-### Backend Architecture
-- **Travel & Seva Backend** (`backend/src`): Express server exposing REST APIs for travel packages, bookings, seva sponsorships, push notifications, and user profiles. Connects to Supabase via `@supabase/supabase-js` using service role keys for admin data access.
-- **Donation Backend**: Express server handling donation causes, donation order creation, collector KYC, and referral leaderboards using Mongoose connections.
-
-### Authentication Flow
-1. **Phone OTP Verification**: Devotee verifies phone number using Firebase Phone Authentication.
-2. **Token Exchange**: The client retrieves the Firebase ID Token and exchanges it independently with both backends:
-   - `POST /api/auth/verify-firebase-token` (Travel Backend) $\rightarrow$ Returns Travel JWT + user profile.
-   - `POST /api/auth/verify-token` (Donation Backend) $\rightarrow$ Returns Donation JWT + user profile.
-3. **Session Hydration**: App layout (`app/_layout.tsx`) initializes session on startup. A 4-second safety race guard ensures `setHydrated(true)` executes cleanly even if offline or under slow networks.
-4. **Onboarding Gate**: If `user.fullName` is empty upon authentication, the user is redirected to `/edit-profile?onboarding=1`.
-
-### Database Architecture
-- **PostgreSQL (Supabase)**: Single relational source of truth for travel packages, multi-passenger bookings, passenger identity documents, seva date sponsorships, push notifications, and payment transactions.
-- **MongoDB**: Document database backing donations, donation causes/heads, and collector profiles.
-
-### Payment Flow
-1. **Order Creation**: Client calls `POST /api/payments/create-order` (or `/api/payments/create-seva-order` / `/api/donations/create-order`). Backend computes total amount on the server and generates a Razorpay Order ID.
-2. **Client Checkout**: Native app launches Razorpay Checkout modal.
-3. **Server Verification**: Upon payment completion, client submits `razorpay_order_id`, `razorpay_payment_id`, and `razorpay_signature` to `POST /api/payments/verify` (or `/verify-seva`).
-4. **HMAC Signature Check**: Backend verifies signature using `crypto.createHmac('sha256', secret)`.
-5. **Atomic Execution**: Successful verification triggers atomic PostgreSQL functions (`capture_booking_payment` & `mark_booking_paid_and_decrement_seats`), updating status to `paid` and decrementing remaining package seats in a single transaction. Webhooks provide fallback reconciliation with deduplication via `razorpay_webhook_events`.
-
-### Notification Flow
-- Push notification tokens (`push_token`) register to `users.push_token` via `registerPushToken()`.
-- System events (booking confirmation, seva approval, identity verification status updates) record to the `notifications` table in PostgreSQL.
-- App fetches user notifications via `GET /api/notifications` with unread badge indicators.
+- Architecture findings
+- Suggested improvements
+- Priority of each issue
 
 ---
 
-## 3. Feature Modules
+## A2. Database Audit
 
-### Authentication & Onboarding
-- Phone OTP login backed by Firebase Auth.
-- Automated creation/fetch of user profile in Supabase `users` table with explicit server-side UUID generation (`crypto.randomUUID()`).
-- Onboarding enforced for users with incomplete profiles (`fullName` blank).
-- **Navigation & Guard Rules**:
-  - `useProtectedRoute` uses `router.replace({ pathname: '/(auth)/login', params: { returnTo: pathname } })` so unauthenticated protected routes are never left in the history stack underneath Login.
-  - Login back button (`handleBack`) returns directly to `/(tabs)/home` in a single back action when exiting an unauthenticated redirect.
-  - Signing out from the Profile screen explicitly navigates to `/(tabs)/home` as a guest before clearing session state, preventing unwanted redirection to the Login page.
-  - `useLocalSearchParams` route parameters (e.g. `returnTo` in `/edit-profile`, `bookingId` in travel screens, `id` in package detail screens) are safely destructured, type-normalized from potential array values, and guarded against missing values during initial render.
+Audit every database object.
 
-### User Profile & Identity Verification
-- Profile management (full name, email, profile image upload to Supabase Storage `profile-images` bucket).
-- **Multipart Upload & Image Management**:
-  - Profile image uploads (`uploadProfileImage`) pass `FormData` without explicit `Content-Type: multipart/form-data` header overrides, preserving the browser/native `boundary` token required by Express `multer`.
-  - Dynamic MIME type and file extension detection (`getMimeTypeFromUri`) extracts image format (`jpg`, `png`, `webp`, `heic`).
-  - Supports updating, replacing, or clearing (`null`) user profile images via `PUT /api/users/me`.
-  - If the target Supabase storage bucket (`profile-images`) is unconfigured in deployment, the backend returns clear diagnostic error feedback (`Storage bucket 'profile-images' is missing or unconfigured.`) without silent crashes.
-- Identity verification (Aadhaar number + Aadhaar document photo + selfie photo upload to `passenger-documents` bucket).
-- Account soft deletion (`DELETE /api/users/me` sets `deleted_at = NOW()`).
+Verify:
 
-### Travel Packages & Dynamic Option Pricing
-- Live travel package listings fetched directly from Supabase `travel_packages`.
-- **Zero Mock Pricing**: Package pricing matrix is fully dynamic and stored per package in Supabase:
-  - `price`: Base package price.
-  - `flight_price`: Flight add-on surcharge.
-  - `train_ac_price`: 3AC Train add-on surcharge.
-  - `train_non_ac_price`: Non-AC Train add-on surcharge.
-  - `room_ac_price`: AC Room upgrade surcharge.
-  - `room_non_ac_price`: Non-AC Room surcharge.
-- Automatic capacity calculation with `total_seats` and `remaining_seats`.
+- Tables
+- Columns
+- Relationships
+- Foreign keys
+- Constraints
+- Indexes
+- Enums
+- Views
+- RPCs
+- Triggers
 
-### Travel Booking Pipeline
-- Multi-traveler support (`booking_passengers` table).
-- Lead traveler data prefilled from user profile.
-- Live client-side unit price calculation (`basePrice + transportAddon + roomAddon`) with live choice badges (`+₹10,000`).
-- **Server-Side Total Re-validation**: Backend recalculates option prices directly from `travel_packages` table during booking creation to guarantee tamper-proof total amounts.
-- Seat reservation locks booking for 15 minutes (`expires_at`). Unpaid expired bookings are automatically cleaned up by `expire_stale_bookings()`.
+Cross-check against:
 
-### Seva Booking & Dynamic Calendar Availability
-- Devotees sponsor full-day Mahaprasad (Nitya Annadan - ₹2,100, stored in MongoDB `NityaAnnadanBooking`) or Katha Sponsorship (Yajman - ₹5,100, stored in Supabase `seva_bookings`).
-- **Timezone-Safe Date Serialization**:
-  - Interactive calendars serialize selected dates using local date component getters (`d.getFullYear()`, `d.getMonth() + 1`, `d.getDate()`) instead of `.toISOString()`. This prevents local midnight Date objects (e.g. `July 25 00:00:00 local IST`) from being converted to UTC previous-day strings (`2026-07-24`).
-  - Date strings (`YYYY-MM-DD`) are formatted for UI display via `formatDateString()`, parsing year/month/day as local dates to guarantee zero off-by-one day shifts between calendar pickers, Zustand state, API payloads, MongoDB/Supabase database storage, and receipts across all client timezones.
-- **Real-Time Calendar Availability**: Availability for Nitya Annadan is fetched from MongoDB using `GET /api/annadan/availability?month=2026-07` or `GET /api/annadan/availability?date=2026-07-20`, while Yajman availability is fetched from Supabase using `GET /api/seva/availability?type=yajman&month=2026-07`.
-- Backend counts confirmed/pending bookings (`paid`, `payment_pending`) for each date, compares against daily configured capacity (`SEVA_CAPACITY_ANNADAN`, `SEVA_CAPACITY_YAJMAN`), and returns date-keyed availability:
-  ```json
-  {
-    "2026-07-20": { "booked": 1, "capacity": 100, "remaining": 99, "available": true },
-    "2026-07-21": { "booked": 100, "capacity": 100, "remaining": 0, "available": false }
-  }
-  ```
-- Fully booked dates are automatically disabled on the interactive calendar.
+- database.types.ts
+- Backend
+- Frontend
 
-### Donations & 80G Receipts
-- Browsable donation causes/heads backed by MongoDB (`DonationHead`).
-- Support for guest and authenticated donations.
-- Automatic generation of 80G compliant tax receipts with downloadable PDFs.
-- Automatic guest-to-account linking by phone number match upon subsequent login.
+Look for:
 
-### Payments & Order Life Cycle
-- Integrated Razorpay checkout flow.
-- Server-side signature verification enforcing zero client trust.
-- Payment idempotency: Duplicate payment verification requests return existing status safely without double-charging or duplicate seat decrements.
-
-### Receipts & Documentation
-- Built-in PDF/Modal receipt viewers for Travel bookings, Seva bookings, and 80G Donations.
-- Native sharing via `Share.share()` for booking references and payment receipts.
-
-### Notifications System
-- Database-backed user notifications table (`notifications`).
-- Supports mark-as-read (`PATCH /api/notifications/:id/read`) and mark-all-read (`PATCH /api/notifications/read-all`).
-
-### Collector Program
-- Displayed on the Homepage grid for all users (guests and authenticated). Tapping as a guest redirects to Login with `returnTo: '/collector-apply'`.
-- Referral attribution via unique referral codes (`referralCode`).
-- Collector KYC submission (`POST /api/collector/apply`).
-- Dashboard statistics, top collectors leaderboard, and total donation referral tracking.
-
-### Health & Diagnostics API
-- Production health check endpoint: `GET /health`.
-- Returns server uptime, current timestamp, environment mode, and active database connection check:
-  ```json
-  {
-    "status": "healthy",
-    "timestamp": "2026-07-22T19:56:00.000Z",
-    "uptimeSeconds": 14205,
-    "environment": "production",
-    "database": {
-      "status": "connected",
-      "latencyMs": 12
-    }
-  }
-  ```
+- schema drift
+- dead columns
+- duplicate data
+- incorrect ownership
+- normalization issues
+- migration inconsistencies
 
 ---
 
-## 4. API Endpoints Reference
+## A3. Backend Audit
 
-### Travel & Seva Backend (Express + Supabase PostgreSQL)
+Review every API route.
 
-#### Public Endpoints
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/health` | Production health check & database latency check |
-| `GET` | `/api/packages` | List active travel packages with remaining seats & option pricing |
-| `GET` | `/api/packages/:id` | Get details for a specific travel package |
-| `GET` | `/api/seva/pricing` | Fetch dynamic Yajman Seva price |
-| `GET` | `/api/seva/availability` | Fetch month-wise Yajman date availability (`?type=yajman&month=YYYY-MM`) |
-| `GET` | `/api/seva/:type/availability` | Fetch single-date or monthly availability for Yajman Seva |
-| `POST` | `/api/auth/verify-firebase-token` | Exchange Firebase ID token for Travel JWT |
-| `POST` | `/api/payments/webhook` | Razorpay webhook listener (deduplicated) |
+Verify:
 
-#### Protected Endpoints (Requires `Authorization: Bearer <Travel_JWT>`)
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/api/users/me` | Fetch authenticated user profile |
-| `PUT` | `/api/users/me` | Update user profile (name, image) |
-| `POST` | `/api/users/upload-profile-image` | Upload user avatar image |
-| `POST` | `/api/users/verify-identity` | Submit Aadhaar & selfie identity verification |
-| `DELETE` | `/api/users/me` | Soft delete user account |
-| `GET` | `/api/bookings` | List user's travel bookings |
-| `POST` | `/api/bookings` | Create new multi-traveler booking & lock seats |
-| `GET` | `/api/bookings/:id` | Get booking details with passenger breakdown |
-| `POST` | `/api/bookings/:id/cancel` | Cancel an unpaid or pending travel booking |
-| `POST` | `/api/payments/create-order` | Create Razorpay order for travel booking |
-| `POST` | `/api/payments/verify` | Verify Razorpay payment signature & confirm booking |
-| `GET` | `/api/seva/history` | List user's past Yajman Seva bookings |
-| `POST` | `/api/seva` | Create a new Yajman Seva booking |
-| `POST` | `/api/payments/create-seva-order` | Create Razorpay order for Yajman Seva booking |
-| `POST` | `/api/payments/verify-seva` | Verify Razorpay signature & confirm Yajman Seva booking |
-| `GET` | `/api/notifications` | List user notifications |
-| `PATCH` | `/api/notifications/:id/read` | Mark single notification as read |
-| `PATCH` | `/api/notifications/read-all` | Mark all user notifications as read |
+- Validation
+- Authorization
+- Error handling
+- Transactions
+- Race conditions
+- Business rules
+- Soft delete handling
+- Payment consistency
+
+Find:
+
+- dead code
+- legacy code
+- unreachable code
+- duplicate logic
+- schema mismatches
 
 ---
 
-### Donation Backend (Express + MongoDB)
+## Phase B – Frontend Audit
 
-#### Public Endpoints
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/api/donation-heads` | List active donation causes/heads |
-| `GET` | `/api/collector/leaderboard` | Top collectors public leaderboard |
-| `POST` | `/api/auth/verify-token` | Exchange Firebase ID token for Donation JWT |
-| `POST` | `/api/donations/create` | Create a donation (Guest or Authenticated) |
-| `POST` | `/api/donations/webhook` | Razorpay webhook listener for donations |
-| `GET` | `/api/annadan/pricing` | Fetch Nitya Annadan dynamic price |
-| `GET` | `/api/annadan/availability` | Canonical availability check for Nitya Annadan (`?date=YYYY-MM-DD` or `?month=YYYY-MM`) |
+## B1. React Native
 
-#### Protected Endpoints (Requires Authorization)
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/api/donations/my-donations` | List user's donation history |
-| `POST` | `/api/donations/create-order` | Create Razorpay order for donation |
-| `GET` | `/api/donations/:id/receipt` | Download 80G donation receipt |
-| `GET` | `/api/collector/dashboard` | Fetch collector performance stats |
-| `POST` | `/api/collector/apply` | Submit collector KYC application |
-| `POST` | `/api/annadan` | Create a Nitya Annadan date booking record |
-| `POST` | `/api/annadan/create-order` | Create Razorpay order for Nitya Annadan booking |
-| `POST` | `/api/annadan/verify-payment` | Verify Razorpay payment signature & confirm Nitya Annadan booking |
-| `GET` | `/api/annadan/upcoming` | Fetch user's upcoming Nitya Annadan bookings |
-| `GET` | `/api/annadan/history` | Fetch user's Nitya Annadan booking history |
+Review:
+
+- Navigation
+- Zustand
+- React Query
+- API integration
+- Loading states
+- Error handling
+- Offline handling
+- State synchronization
+
+Look for:
+
+- stale state
+- duplicate interfaces
+- unnecessary re-renders
+- memory leaks
 
 ---
 
-## 5. Database Schema Reference
+## B2. Type Safety
 
-### PostgreSQL (Supabase) Schema
+Audit:
 
-#### `users` Table
-```sql
-CREATE TABLE public.users (
-    id UUID PRIMARY KEY,
-    phone TEXT NOT NULL UNIQUE,
-    full_name TEXT NOT NULL DEFAULT '',
-    email TEXT,
-    role TEXT NOT NULL DEFAULT 'user',
-    profile_image_url TEXT,
-    verification_status TEXT NOT NULL DEFAULT 'not_submitted',
-    aadhaar_number TEXT,
-    aadhaar_image_path TEXT,
-    selfie_image_path TEXT,
-    push_token TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
-);
-```
+- database.types.ts
+- DTOs
+- manual interfaces
+- API response models
 
-#### `travel_packages` Table
-```sql
-CREATE TABLE public.travel_packages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    price NUMERIC NOT NULL,
-    duration TEXT NOT NULL,
-    total_seats INTEGER NOT NULL,
-    remaining_seats INTEGER NOT NULL,
-    image_url TEXT,
-    inclusions TEXT[],
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    start_date DATE,
-    end_date DATE,
-    flight_price NUMERIC NOT NULL DEFAULT 0,
-    train_ac_price NUMERIC NOT NULL DEFAULT 0,
-    train_non_ac_price NUMERIC NOT NULL DEFAULT 0,
-    room_ac_price NUMERIC NOT NULL DEFAULT 0,
-    room_non_ac_price NUMERIC NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
+Identify:
 
-#### `bookings` Table
-```sql
-CREATE TABLE public.bookings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    booking_reference TEXT NOT NULL UNIQUE,
-    user_id UUID NOT NULL REFERENCES public.users(id),
-    package_id UUID NOT NULL REFERENCES public.travel_packages(id),
-    status TEXT NOT NULL DEFAULT 'payment_pending',
-    traveler_count INTEGER NOT NULL DEFAULT 1,
-    total_amount NUMERIC NOT NULL,
-    base_amount NUMERIC NOT NULL,
-    payable_amount NUMERIC NOT NULL,
-    gateway_fee NUMERIC NOT NULL DEFAULT 0,
-    transport_mode TEXT NOT NULL,
-    room_type TEXT NOT NULL,
-    bus_seat_numbers TEXT[],
-    lead_traveler_name TEXT NOT NULL,
-    lead_traveler_phone TEXT NOT NULL,
-    lead_traveler_email TEXT,
-    lead_traveler_address TEXT,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-#### `booking_passengers` Table
-```sql
-CREATE TABLE public.booking_passengers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
-    passenger_index INTEGER NOT NULL,
-    is_primary BOOLEAN NOT NULL DEFAULT false,
-    full_name TEXT NOT NULL,
-    dob DATE,
-    gender TEXT NOT NULL DEFAULT 'other',
-    phone TEXT,
-    address TEXT,
-    aadhaar_number TEXT,
-    verification_status TEXT NOT NULL DEFAULT 'not_submitted',
-    admin_notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-#### `seva_bookings` Table
-```sql
-CREATE TABLE public.seva_bookings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    booking_reference TEXT NOT NULL UNIQUE,
-    user_id UUID NOT NULL REFERENCES public.users(id),
-    seva_type TEXT NOT NULL, -- 'annadan' | 'yajman'
-    seva_date DATE NOT NULL,
-    full_name TEXT NOT NULL,
-    phone_number TEXT NOT NULL,
-    total_amount NUMERIC NOT NULL,
-    status TEXT NOT NULL DEFAULT 'payment_pending',
-    razorpay_order_id TEXT,
-    razorpay_payment_id TEXT,
-    razorpay_signature TEXT,
-    notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-#### `payments` Table
-```sql
-CREATE TABLE public.payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    booking_id UUID NOT NULL REFERENCES public.bookings(id),
-    amount NUMERIC NOT NULL,
-    payment_method TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    razorpay_order_id TEXT UNIQUE,
-    razorpay_payment_id TEXT UNIQUE,
-    razorpay_signature TEXT,
-    gateway_fee NUMERIC DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-#### `notifications` Table
-```sql
-CREATE TABLE public.notifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.users(id),
-    type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    metadata JSONB,
-    is_read BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
+- duplicated models
+- unsafe casting
+- any usage
+- nullable mistakes
+- outdated interfaces
 
 ---
 
-### MongoDB Schema
+## Phase C – Security Audit
 
-- **`User` (`mainDb`)**: `fullName`, `email`, `mobile`, `role` (`USER`/`COLLECTOR_PENDING`/`COLLECTOR_APPROVED`), `referralCode`, `collectorProfile` (`kycStatus`, `aadhaarNumber`, `aadhaarFrontUrl`).
-- **`Donation` (`mainDb`)**: Regular Annadan and general monetary cause donations (`user`, `collectorId`, `donor` (`name`, `mobile`, `pan`), `donationHead` (`id`, `name`), `amount`, `status`, `receiptNumber`, `receiptUrl`).
-- **`NityaAnnadanBooking` (`mainDb`)**: Mobile app Nitya/Special Annadan calendar date sponsorships (`bookingReference`, `userId`, `sevaType: 'annadan'`, `sevaDate`, `fullName`, `phoneNumber`, `totalAmount`, `status` (`payment_pending`, `paid`, `cancelled`), `razorpayOrderId`, `razorpayPaymentId`, `razorpaySignature`). Cleanly isolated from `Donation`.
-- **`DonationHead` (`sharedDb`)**: `key`, `name`, `description`, `imageUrl`, `minAmount`, `presetAmounts`, `is80GEligible`, `isActive`.
+Review:
 
----
+- Firebase authentication
+- JWT validation
+- Authorization
+- File uploads
+- Static file serving
+- Passenger documents
+- Profile images
+- Receipt access
+- Path traversal
+- Rate limiting
+- Input validation
 
-## 6. Security Implementation
-
-### Firebase & Dual JWT Token Model
-- Firebase Auth handles primary mobile identity.
-- Client exchanges Firebase ID tokens with respective backends to receive domain-specific JWTs.
-- Travel JWTs are signed with `JWT_SECRET` and validated by Express middleware `authenticateToken`.
-- Donation JWTs are signed separately and validated by Donation Backend middleware.
-
-### Razorpay Signature & Idempotency
-- Signature Verification: HMAC-SHA256 signature verification executes server-side:
-  ```ts
-  const expected = crypto.createHmac('sha256', secret)
-    .update(`${orderId}|${paymentId}`)
-    .digest('hex');
-  if (expected !== signature) throw new HttpError(400, 'Invalid signature');
-  ```
-- Duplicate Payment Protection: Payment verification endpoints check if the order/booking is already marked `paid`. If already processed, it responds immediately with success without re-executing seat decrements or database mutations.
-
-### Ownership & Data Isolation
-- Users can only fetch and update their own bookings, profiles, and notifications (`WHERE user_id = req.user.id`).
-- Admin routes explicitly verify `req.user.role === 'admin'`.
-
-### Seat Lock & Booking Expiry
-- When a booking is created, seats are temporarily soft-reserved and `expires_at` is set to `NOW() + INTERVAL '15 minutes'`.
-- PostgreSQL stored procedure `expire_stale_bookings()` automatically frees seats for unpaid bookings past their expiration time.
-
-### Rate Limiting & Input Validation
-- Express API endpoints apply standard JSON payload constraints and type validation.
-- All monetary amounts and traveler counts are validated server-side to prevent parameter tampering.
+Verify every protected endpoint.
 
 ---
 
-## 7. Production Deployment & Infrastructure
+## Phase D – Payments Audit
 
-### Health Monitoring
-- Health endpoint `GET /health` is monitored continuously.
-- Checks API responsiveness and executes a `SELECT 1` ping against Supabase PostgreSQL to verify DB health.
+Review the complete payment lifecycle.
 
-### Environment Variables
+Verify:
 
-#### Travel Backend (`backend/.env`)
-```env
-PORT=3000
-NODE_ENV=production
-SUPABASE_URL=https://<your-project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-JWT_SECRET=<strong-random-jwt-secret>
-RAZORPAY_KEY_ID=<your-razorpay-key-id>
-RAZORPAY_KEY_SECRET=<your-razorpay-key-secret>
-RAZORPAY_WEBHOOK_SECRET=<your-razorpay-webhook-secret>
-SEVA_CAPACITY_ANNADAN=100
-SEVA_CAPACITY_YAJMAN=50
-ANNADAN_SEVA_PRICE=2100
-YAJMAN_SEVA_PRICE=5100
-```
+- Razorpay order creation
+- HMAC verification
+- Webhook processing
+- Idempotency
+- Booking consistency
+- Seat locking
+- Duplicate payments
+- Failed payments
+- Refund flow
 
-#### Frontend (`.env.production`)
-```env
-EXPO_PUBLIC_API_BASE_URL=https://api.mavt.in
-EXPO_PUBLIC_DONATION_API_BASE_URL=https://api.mavt.in
-EXPO_PUBLIC_SUPABASE_URL=https://jpvowbxojdvrpgtpxvmo.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_rjOY7F_gXhf7ZL6bLnhOtg_yiDlJ1s6
-EXPO_PUBLIC_RAZORPAY_KEY_ID=rzp_test_SxD6T0TWVN7G3r
-```
-
-### VPS, PM2 & Nginx Setup
-
-#### Process Management (PM2)
-Backends run under PM2 for automatic restart and cluster process management:
-```bash
-pm2 start dist/server.js --name "shri-gurudev-backend" --env production
-pm2 save
-```
-
-#### Nginx Reverse Proxy Configuration
-```nginx
-server {
-    server_name api.mavt.in;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    listen 443 ssl;
-    ssl_certificate /etc/letsencrypt/live/api.mavt.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.mavt.in/privkey.pem;
-}
-```
+Challenge every assumption.
 
 ---
 
-## 8. Decision Log
+## Phase E – Documentation Audit
 
-### Decision
-Moved calendar from `index.tsx` to `StepDate.tsx`.
+Review:
 
-### Reason
-The booking flow redesign requires the purpose selection (Birthday, Smruti, Pitrayartha, General) to happen before date selection.
+- AUDIT.md
+- IMPLEMENTATION.md
 
-### Impact
-No navigation route name changes. Maintained backward compatibility.
+Verify documentation matches the implementation.
 
-### Files
-- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
-- [StepDate.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepDate.tsx)
+Find:
 
----
-
-### Decision
-Deconstructed `details.tsx` into lightweight, modular step components (`StepDate`, `StepRecurring`, `StepBeneficiary`, `StepSponsor`, `StepIdentity`) instead of a single large file.
-
-### Reason
-Improves readability, maintainability, and makes debugging much simpler.
-
-### Impact
-Clean components with isolated state logic, using Zustand as the single source of truth.
-
-### Files
-- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
-- `src/features/annadan/steps/*`
+- outdated sections
+- undocumented endpoints
+- undocumented schema changes
+- undocumented features
 
 ---
 
-### Decision
-Encrypted Aadhaar and PAN numbers at rest in MongoDB using AES-256-GCM.
+# Rules
 
-### Reason
-Sensitive PII must not be stored in plaintext.
-
-### Impact
-Data is encrypted before being saved and only decrypted on the server when needed (e.g. for generating receipts). Frontend only receives and displays masked versions.
-
-### Files
-- [encryption.ts](file:///c:/shri-gurudev-ashram-app/backend/src/utils/encryption.ts)
-- [nityaAnnadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/models/nityaAnnadan.ts)
-- [annadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/annadan.ts)
+- Audit only.
+- Do NOT implement fixes.
+- Do NOT modify source code.
+- Do NOT edit documentation.
+- Verify every finding with evidence.
+- Do not speculate.
+- If something cannot be verified, explicitly state that.
 
 ---
 
-### Decision
-Stored additional recurring booking details (`isRecurring`, `recurringFrequency`, `recurringStartDate`, `recurringEndDate`, `nextExecutionDate`, `lastExecutedDate`).
+# Deliverables
 
-### Reason
-Ensure schema supports automated future renewals of Annadan bookings via an offline/async job.
+For every issue provide:
 
-### Impact
-Ensures that recurring scheduling database fields are captured at the point of booking creation.
-
-### Files
-- [nityaAnnadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/models/nityaAnnadan.ts)
-- [annadan.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/annadan.ts)
-
----
-
-### Decision
-Refactored the conditional `Animated.View` entering layout animation wrapper around the "Continue" CTA button in `StepDate.tsx` into a unified, non-dynamically mounted `Pressable` with conditional styles.
-
-### Reason
-In Reanimated 3+ layout animations on Android release builds (APK/App Mode), dynamically mounting an `Animated.View` with layout entering transitions (like `FadeInDown`) can cause native touch responders to fail to bind or misalign layout coordinate bounds, rendering the button unresponsive to clicks.
-
-### Impact
-Fixes the click responsiveness in release mode while standardizing button rendering styles across all step components.
-
-### Files
-- [StepDate.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepDate.tsx)
+- Title
+- Category
+- Severity (Critical / High / Medium / Low)
+- Confidence (High / Medium / Low)
+- Files affected
+- Evidence
+- Why it is a problem
+- Recommended fix
+- Should this block production? (Yes / No)
 
 ---
 
-### Decision
-Applied dynamic bottom padding offsets equivalent to `tabBarHeight + 24` to the ScrollView content containers in all main Annadan routing screens (`index.tsx`, `details.tsx`, and `review.tsx`).
+# Final Report
 
-### Reason
-The custom floating bottom navigation bar has a visible and notch-concave SVG height of `116.8 + Math.max(insets.bottom, 8)` pixels. In screens nested inside the `(tabs)` navigator, this floating bar overlaps the bottommost components of pages (such as CTA Continue or Review Submit buttons) unless the ScrollView content area explicitly padds it out.
+Provide:
 
-### Impact
-Ensures that all CTA buttons and critical bottom card items scroll completely above the custom floating tab bar, making them visible and clickable on all form factors and devices.
+- Architecture Score (/10)
+- Database Score (/10)
+- Backend Score (/10)
+- Frontend Score (/10)
+- Security Score (/10)
+- Type Safety Score (/10)
+- Documentation Score (/10)
+- Production Readiness Score (/10)
 
-### Files
-- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
-- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
-- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/review.tsx)
+Also produce:
 
----
+- Top 20 Issues (ranked)
+- Top 10 Quick Wins
+- Top 10 Long-Term Improvements
+- Items Safe to Ignore
 
-### Decision
-Refined the Annadan booking flow UI and display logic to implement finalized business requirements (consisting of exactly three purposes: Birthday, Smruti Pitrayartha, and General Annadan, and changing the subscription terminology to "Book for the Entire Year").
-
-### Reason
-Devotees preferred a one-time 12-month date reservation duration over subscription/recurring payment semantics, and the Ashram consolidated historical purposes to a single Smruti Pitrayartha option. We implemented this in the presentation layer (UI) to prevent breaking database enums, API structures, or payment integration code.
-
-### Impact
-* Refactored `StepRecurring.tsx` to use a premium selectable card toggle layout.
-* Updated Review & Receipt screens to display `Booking Duration: Entire Year / One-Time` and clean vertical `Booking Period` timelines.
-* Mapped legacy `smruti` and `pitrayartha` databases values to `"Smruti Pitrayartha"` on receipts for 100% backward compatibility.
-* Retained legacy variables (`isRecurring`, `recurringStartDate`, `recurringEndDate`) internally in types/store/backend.
-
-### Files
-- [constants.ts](file:///c:/shri-gurudev-ashram-app/src/features/annadan/constants.ts)
-- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/details.tsx)
-- [StepRecurring.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepRecurring.tsx)
-- [StepBeneficiary.tsx](file:///c:/shri-gurudev-ashram-app/src/features/annadan/steps/StepBeneficiary.tsx)
-- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/review.tsx)
-- [SevaReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/SevaReceipt.tsx)
-
----
-
-### Decision
-Implemented Major Architecture Enhancement unifying Yatra Booking, Guruji Aarti Seva, and Yajman Pad Booking into a single-checkout booking engine with backend-authoritative pricing and a single source of truth availability ledger.
-
-### Reason
-Devotees required the ability to book Guruji Aarti Seva or Yajman Pad Booking directly from the drawer menu, or add one as an additional spiritual service during Yatra booking without creating separate Razorpay payment orders.
-
-### Impact
-* Expanded left navigation drawer in `home.tsx` with direct navigation entries.
-* Refactored `app/(tabs)/seva/yajman/index.tsx`, `details.tsx`, `review.tsx` into a generic booking engine supporting `type=aarti` and `type=yajman_pad`.
-* Added Step 4 ("Enhance Your Spiritual Journey") to `BookingForm.tsx` with mutually exclusive radio-card choices.
-* Encapsulated addon state cleanly in `useBookingDraftStore.ts` under `addonService: { type, bookingDate, amount }`.
-* Backend authoritatively looks up pricing, verifies availability against `seva_bookings`, inserts linked `seva_bookings` entries for single source of truth availability, and generates a single Razorpay payment order.
-* Updated `TravelReceipt.tsx` to display itemized additional spiritual service charges and breakdown.
-
-### Files
-- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
-- [useBookingDraftStore.ts](file:///c:/shri-gurudev-ashram-app/src/store/useBookingDraftStore.ts)
-- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/index.tsx)
-- [details.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/details.tsx)
-- [review.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/yajman/review.tsx)
-- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
-- [travel.ts](file:///c:/shri-gurudev-ashram-app/src/types/travel.ts)
-- [bookings.ts](file:///c:/shri-gurudev-ashram-app/src/services/bookings.ts)
-- [bookings.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/bookings.ts)
-- [payments.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/payments.ts)
-- [TravelReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/TravelReceipt.tsx)
-- [success.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/success.tsx)
-
----
-
-### Decision
-Optimized the Yatra Booking Flow by making Step 4 (Additional Spiritual Service) the final decision point before checkout and enhancing the Payment screen (`app/(tabs)/travel/payment.tsx`) to act as the unified final review & summary screen.
-
-### Reason
-Removing the redundant intermediate review screen simplifies the user experience, reduces friction, and allows devotees to review the complete itemized breakdown (Yatra Package + Additional Seva + Selected Dates + Total Amount) in a single place before initiating Razorpay checkout.
-
-### Impact
-* Streamlined Yatra wizard: Step 1 (Route) → Step 2 (Comfort Tier) → Step 3 (Personal Info & Documents) → Step 4 (Additional Spiritual Service) → Payment.
-* Enhanced `payment.tsx` to render an itemized summary card detailing Yatra package charges, additional spiritual service options & dates, lead traveler info, and total amount.
-* Directly triggers single Razorpay payment from the summary screen.
-
-### Files
-- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
-- [payment.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/payment.tsx)
-
----
-
-### Decision
-Refined the Home page "Essential Services" section by removing the duplicate "Guruji Aarti Seva" card, creating a perfectly balanced 2-column grid layout (3 × 2 = 6 services).
-
-### Reason
-Guruji Aarti Seva is already accessible via the Navigation Drawer and as an embedded add-on during Yatra booking. Removing it from the Home page prevents duplicate entry points and balances the grid cleanly without leaving empty spaces.
-
-### Impact
-* Rebalanced Essential Services grid to 6 services: Yatra Booking, Annadan, Donations, My Activity, Collector Registration, Announcements.
-* Perfectly aligned 3-row, 2-column layout adhering to Sacred Minimalism guidelines.
-* Guruji Aarti Seva booking functionality remains intact via Drawer & Yatra Add-on.
-
-### Files
-- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
-
----
-
-### Decision
-Embedded an in-place interactive monthly availability calendar (`SevaInlineCalendar`) directly below the selected option on Step 4 ("Enhance Your Spiritual Journey") of Yatra Booking, and added dual confirmation badges to the Success screen.
-
-### Reason
-Allows devotees to view and select available Guruji Aarti or Yajman Pad dates directly within the Yatra booking step without screen navigation, and provides explicit confirmation badges for both Yatra and Seva on completion.
-
-### Impact
-* Expanded `SevaInlineCalendar` directly underneath "Guruji Aarti Seva" or "Yajman Pad Booking" card selection on Step 4.
-* Reused real-time `fetchSevaMonthlyAvailability` ledger to disable already reserved or past dates.
-* Updated `success.tsx` to display dual confirmation badges (`✓ Yatra Booking Confirmed`, `✓ Guruji Aarti Seva Confirmed` / `✓ Yajman Pad Booking Confirmed`).
-
-### Files
-- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
-- [success.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/travel/success.tsx)
-
----
-
-### Decision
-Refined the Annadan Seva purpose selection screen (`app/(tabs)/seva/annadan/index.tsx`) typography, copy, and card spacing.
-
-### Reason
-The previous question heading ("Why are you performing Annadan?") had a negative top margin on the subtitle causing overlap when the heading wrapped onto 2 lines.
-
-### Impact
-* Replaced heading with natural statement: **"Select the Purpose of Annadan"**.
-* Updated subtitle to: **"Choose the occasion for offering your Annadan Seva."**.
-* Set clean typography (`fontSize: 24`, `fontWeight: '800'`, `lineHeight: 32`, `marginTop: 4`) with zero negative margins.
-* Added generous bottom spacing below the hero sponsorship chip card before the purpose section.
-
-### Files
-- [index.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/seva/annadan/index.tsx)
-
----
-
-### Decision
-Restructured the bottom navigation bar and drawer menu to highlight **Donate** as the primary action.
-
-### Reason
-Aligns navigation with Sacred Minimalism design guidelines and simplifies key user actions.
-
-### Impact
-* **Bottom Tab Bar**:
-  - `Home`: `/(tabs)/home`
-  - `Yatra`: `/(tabs)/travel`
-  - **🪙 Donate (Floating Center Button)**: `/(tabs)/donation` with saffron/gold gradient (`['#E65C00', '#FF9933']`), white ring border, and elevated shadow.
-  - `Alerts`: `/(tabs)/notifications`
-  - `Profile`: `/(tabs)/profile`
-* **Navigation Drawer**: Cleanly includes Home, Yatra Booking, Guruji Aarti Seva, Yajman Pad Booking, Donations, My Bookings, Profile.
-
-### Files
-- [CustomTabBar.tsx](file:///c:/shri-gurudev-ashram-app/src/components/CustomTabBar.tsx)
-- [_layout.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/_layout.tsx)
-- [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
+Finally, recommend the optimal implementation order for all identified issues based on risk, impact, and development effort.

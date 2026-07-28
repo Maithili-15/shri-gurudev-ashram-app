@@ -27,7 +27,7 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { useQuery } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 
-import { createDonation, createDonationOrder, getDonationHeads, getRecentDonations, getTopDonors } from '../../services/donation'
+import { createDonation, createDonationOrder, verifyDonationPayment, getDonationHeads, getRecentDonations, getTopDonors } from '../../services/donation'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useTabBarBottomPadding } from '../../hooks/useTabBarBottomPadding'
 
@@ -170,6 +170,16 @@ export default function DonationScreen() {
     mobile: user?.phone || '',
   })
 
+  React.useEffect(() => {
+    if (user) {
+      setState((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.fullName || '',
+        mobile: prev.mobile || user.phone || '',
+      }))
+    }
+  }, [user])
+
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
 
@@ -249,6 +259,7 @@ export default function DonationScreen() {
           name: state.fullName,
           mobile: state.mobile,
           email: '', // unused in new form
+          idType: 'PAN',
           idNumber: state.pan.toUpperCase(),
           dob: state.dob?.toISOString(),
           anonymousDisplay: state.anonymousDisplay,
@@ -278,7 +289,12 @@ export default function DonationScreen() {
         theme: { color: '#E65C00' },
       })
 
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await verifyDonationPayment({
+        donationId: donationRes.donationId,
+        razorpayOrderId: checkoutResult.razorpay_order_id,
+        razorpayPaymentId: checkoutResult.razorpay_payment_id,
+        razorpaySignature: checkoutResult.razorpay_signature,
+      })
 
       router.replace({
         pathname: '/donation-success',
@@ -290,7 +306,8 @@ export default function DonationScreen() {
       } as never)
 
     } catch (error: any) {
-      Alert.alert('Payment Error', error?.message || 'Failed to complete donation. Please try again.')
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to complete donation. Please try again.'
+      Alert.alert('Payment Error', errorMessage)
     } finally {
       setIsPaying(false)
     }
