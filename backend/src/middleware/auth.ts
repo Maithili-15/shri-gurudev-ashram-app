@@ -4,7 +4,7 @@ import { HttpError } from '../errors'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { normalizeFirebasePhone, verifyFirebaseIdToken } from '../services/firebaseAdmin'
 
-export type AuthenticatedRequest = Request & { userId?: string }
+export type AuthenticatedRequest = Request & { userId?: string; userRole?: string }
 
 export async function optionalAuth(request: Request, _response: Response, next: NextFunction) {
   try {
@@ -58,3 +58,30 @@ export async function requireAuth(request: Request, _response: Response, next: N
     next()
   } catch (error) { next(error) }
 }
+
+export async function requireAdmin(request: Request, response: Response, next: NextFunction) {
+  try {
+    const authReq = request as AuthenticatedRequest
+    if (!authReq.userId) {
+      await requireAuth(request, response, async () => {})
+    }
+    const userId = authReq.userId
+    if (!userId) throw new HttpError(403, 'Administrator access required')
+
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error || !user || !['admin', 'WEBSITE_ADMIN', 'SYSTEM_ADMIN'].includes(user.role)) {
+      throw new HttpError(403, 'Administrator access required')
+    }
+
+    authReq.userRole = user.role
+    next()
+  } catch (error) {
+    next(error)
+  }
+}
+

@@ -14,7 +14,6 @@ const ALLOWED_MIME_TYPES = [
   'image/heif',
   'image/heic-sequence',
   'image/heif-sequence',
-  'application/octet-stream',
 ]
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024 // 15 MB

@@ -1,6 +1,8 @@
+import path from "path";
+import fs from "fs";
 import { Router } from "express";
 import { HttpError } from "../errors";
-import { AuthenticatedRequest, requireAuth } from "../middleware/auth";
+import { AuthenticatedRequest, requireAuth, requireAdmin } from "../middleware/auth";
 import { profileImageUpload, upload } from "../middleware/upload";
 import { supabaseAdmin } from "../services/supabaseAdmin";
 import { createNotification } from "../services/notifications";
@@ -208,19 +210,60 @@ usersRouter.post(
   },
 );
 
+usersRouter.get(
+  "/verifications/document",
+  requireAuth,
+  async (request, response, next) => {
+    try {
+      const authRequest = request as AuthenticatedRequest & { userRole?: string };
+      const rawPath = String(request.query.path || request.query.filepath || "");
+      if (!rawPath) throw new HttpError(400, "Document path parameter is required");
+
+      const baseDir = path.resolve(process.cwd(), "uploads", "verifications");
+      const targetPath = path.resolve(process.cwd(), rawPath);
+
+      // Prevent path traversal
+      if (!targetPath.startsWith(baseDir)) {
+        throw new HttpError(403, "Access denied: invalid document path");
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        throw new HttpError(404, "Verification document not found");
+      }
+
+      // Check owner or admin
+      const isOwner = authRequest.userId && targetPath.includes(path.join("uploads", "verifications", authRequest.userId));
+      const isAdmin = authRequest.userRole && ["admin", "WEBSITE_ADMIN", "SYSTEM_ADMIN"].includes(authRequest.userRole);
+
+      if (!isOwner && !isAdmin) {
+        // Double check admin role from DB if not already set on request
+        const { data: user } = await supabaseAdmin
+          .from("users")
+          .select("role")
+          .eq("id", authRequest.userId)
+          .maybeSingle();
+
+        if (!user || !["admin", "WEBSITE_ADMIN", "SYSTEM_ADMIN"].includes(user.role)) {
+          throw new HttpError(403, "Forbidden access to verification document");
+        }
+      }
+
+      response.sendFile(targetPath);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 usersRouter.post(
   "/verification/submit",
   requireAuth,
   async (request, response, next) => {
     try {
       const {
-        identityType = "aadhaar",
         aadhaarNumber,
         aadhaarImagePath,
-        aadhaarBackImagePath,
         selfieImagePath,
-        panNumber,
-        panImagePath,
       } = request.body as SubmitVerificationBody;
 
       const authRequest = request as AuthenticatedRequest;
@@ -247,42 +290,22 @@ usersRouter.post(
         throw new HttpError(409, "Verification has already been submitted");
       }
 
-      const updatePayload: Record<string, any> = {
-        identity_type: identityType,
-        verification_status: "submitted",
-      };
-
-      if (identityType === "pan") {
-        if (!panNumber || typeof panNumber !== "string" || !/^[A-Z]{5}\d{4}[A-Z]$/.test(panNumber.trim().toUpperCase())) {
-          throw new HttpError(400, "Valid PAN number is required (format: ABCDE1234F)");
-        }
-        if (!panImagePath || typeof panImagePath !== "string" || !panImagePath.trim()) {
-          throw new HttpError(400, "panImagePath is required");
-        }
-
-        const cleanPan = panNumber.trim().toUpperCase();
-        updatePayload.pan_number = cleanPan;
-        updatePayload.pan_image_path = panImagePath.trim();
-        updatePayload.identity_number_masked = `XXXXX${cleanPan.slice(-4)}`;
-      } else {
-        // Aadhaar
-        if (!aadhaarNumber || typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.trim())) {
-          throw new HttpError(400, "aadhaarNumber must be exactly 12 numeric digits");
-        }
-        if (!aadhaarImagePath || typeof aadhaarImagePath !== "string" || !aadhaarImagePath.trim()) {
-          throw new HttpError(400, "aadhaarImagePath is required");
-        }
-        if (!selfieImagePath || typeof selfieImagePath !== "string" || !selfieImagePath.trim()) {
-          throw new HttpError(400, "selfieImagePath is required");
-        }
-
-        const cleanAadhaar = aadhaarNumber.trim();
-        updatePayload.aadhaar_number = cleanAadhaar;
-        updatePayload.aadhaar_image_path = aadhaarImagePath.trim();
-        if (aadhaarBackImagePath) updatePayload.aadhaar_back_image_path = aadhaarBackImagePath.trim();
-        updatePayload.selfie_image_path = selfieImagePath.trim();
-        updatePayload.identity_number_masked = `XXXX XXXX ${cleanAadhaar.slice(-4)}`;
+      if (!aadhaarNumber || typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.trim())) {
+        throw new HttpError(400, "aadhaarNumber must be exactly 12 numeric digits");
       }
+      if (!aadhaarImagePath || typeof aadhaarImagePath !== "string" || !aadhaarImagePath.trim()) {
+        throw new HttpError(400, "aadhaarImagePath is required");
+      }
+      if (!selfieImagePath || typeof selfieImagePath !== "string" || !selfieImagePath.trim()) {
+        throw new HttpError(400, "selfieImagePath is required");
+      }
+
+      const updatePayload = {
+        verification_status: "submitted",
+        aadhaar_number: aadhaarNumber.trim(),
+        aadhaar_image_path: aadhaarImagePath.trim(),
+        selfie_image_path: selfieImagePath.trim(),
+      };
 
       const { data: updatedUser, error: updateError } = await supabaseAdmin
         .from("users")
@@ -306,12 +329,12 @@ usersRouter.post(
 );
 
 // ─── Website Admin Verification Management ──────────────────────────────────
-usersRouter.get("/admin/verifications", requireAuth, async (request, response, next) => {
+usersRouter.get("/admin/verifications", requireAdmin, async (request, response, next) => {
   try {
     const status = request.query.status as string | undefined;
     let query = supabaseAdmin
       .from("users")
-      .select("id, full_name, phone_number, email, verification_status, identity_type, identity_number_masked, aadhaar_image_path, aadhaar_back_image_path, pan_image_path, selfie_image_path, review_notes, reviewed_by, reviewed_at, created_at")
+      .select("id, full_name, phone, email, verification_status, aadhaar_number, aadhaar_image_path, selfie_image_path, created_at")
       .order("created_at", { ascending: false });
 
     if (status) {
@@ -328,7 +351,7 @@ usersRouter.get("/admin/verifications", requireAuth, async (request, response, n
   }
 });
 
-usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async (request, response, next) => {
+usersRouter.post("/admin/verifications/:targetUserId/review", requireAdmin, async (request, response, next) => {
   try {
     const { targetUserId } = request.params;
     const { action, notes } = request.body ?? {};
@@ -337,16 +360,12 @@ usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async
       throw new HttpError(400, "Action must be 'approve' or 'reject'");
     }
 
-    const reviewerId = (request as AuthenticatedRequest).userId;
     const newStatus = action === "approve" ? "verified" : "rejected";
 
     const { data: updatedUser, error } = await supabaseAdmin
       .from("users")
       .update({
         verification_status: newStatus,
-        review_notes: notes ? String(notes).trim() : null,
-        reviewed_by: reviewerId,
-        reviewed_at: new Date().toISOString(),
       })
       .eq("id", targetUserId)
       .select("*")

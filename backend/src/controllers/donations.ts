@@ -124,7 +124,10 @@ export async function verifyDonationPayment(request: Request, response: Response
       .update(`${orderIdToVerify}|${razorpayPaymentId}`)
       .digest('hex')
 
-    if (expectedSignature !== razorpaySignature) {
+    const isSignatureValid = expectedSignature.length === String(razorpaySignature).length &&
+      crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(String(razorpaySignature)))
+
+    if (!isSignatureValid) {
       throw new HttpError(400, 'Invalid payment signature')
     }
 

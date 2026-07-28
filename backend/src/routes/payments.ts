@@ -311,6 +311,21 @@ paymentsRouter.post('/verify-seva', requireAuth, async (request, response, next)
       return
     }
 
+    const { data: duplicateSeva, error: duplicateSevaError } = await supabaseAdmin
+      .from('seva_bookings')
+      .select('id')
+      .eq('razorpay_payment_id', razorpay_payment_id)
+      .neq('id', bookingId)
+      .maybeSingle()
+
+    if (duplicateSevaError) {
+      throw new HttpError(500, duplicateSevaError.message)
+    }
+
+    if (duplicateSeva) {
+      throw new HttpError(409, 'Razorpay payment has already been processed')
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from('seva_bookings')
       .update({

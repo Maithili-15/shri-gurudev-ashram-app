@@ -123,8 +123,13 @@ const canonicalReceiptDir = path.resolve(
 )
 fs.mkdirSync(canonicalReceiptDir, { recursive: true })
 app.use('/receipts', express.static(canonicalReceiptDir))
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+const profileUploadsDir = path.resolve(
+  path.basename(process.cwd()) === 'backend' ? process.cwd() : path.join(process.cwd(), 'backend'),
+  'uploads',
+  'profile-images'
+)
+fs.mkdirSync(profileUploadsDir, { recursive: true })
+app.use('/uploads/profile-images', express.static(profileUploadsDir))
 
 export async function connectAppDatabases() {
   await connectDonationDatabases()
