@@ -80,6 +80,7 @@ export type CreateBookingInput = {
   roomType: string;
   passengers: CreateBookingPassengerInput[];
   additionalSevaType?: string;
+  additionalSevaPackageId?: string;
   additionalSevaDate?: string;
 };
 

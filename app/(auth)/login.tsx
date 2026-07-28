@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -125,8 +125,8 @@ export default function PhoneAuthRoute() {
             <Pressable onPress={handleBack} style={styles.backButton}>
               <MaterialIcons name="arrow-back" size={22} color="#8B5A00" />
             </Pressable>
-            <View style={styles.iconWrap}>
-              <MaterialIcons name="spa" size={28} color="#8B5A00" />
+            <View style={styles.logoWrap}>
+              <Image source={require('../../assets/recieptLogo.jpeg')} style={styles.logo} resizeMode="contain" />
             </View>
             <Text style={styles.kicker}>Phone authentication</Text>
             <Text style={styles.title}>Continue with your phone</Text>
@@ -204,7 +204,8 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1 },
   content: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
   backButton: { alignSelf: 'flex-start', width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  iconWrap: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#FFF0D9', alignItems: 'center', justifyContent: 'center' },
+  logoWrap: { width: 68, height: 68, borderRadius: 34, overflow: 'hidden', backgroundColor: '#FFFFFF', padding: 3, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  logo: { width: '100%', height: '100%', borderRadius: 31 },
   kicker: { color: '#E65C00', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.4 },
   title: { color: '#2B231B', fontSize: 32, lineHeight: 38, fontWeight: '900', marginBottom: 6 },
   primaryButton: { minHeight: 58, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 4 },

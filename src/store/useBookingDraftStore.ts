@@ -17,9 +17,10 @@ export type PassengerDraft = {
 };
 
 export type AddonServiceDraft = {
-  type: 'guruji_aarti' | 'yajman_pad'
-  bookingDate: string
-  amount: number
+  packageId: string
+  title: string
+  amount: number // for UI display
+  bookingDate?: string
 } | null
 
 export type BookingDraftValues = {

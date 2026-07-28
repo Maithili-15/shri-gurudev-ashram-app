@@ -22,11 +22,12 @@ sevaRouter.post('/', requireAuth, async (request, response, next) => {
       sevaDate,
       fullName,
       phoneNumber,
-      totalAmount,
+      totalAmount, // Legacy fallback
       notes,
+      sevaPackageId,
     } = request.body
 
-    if (!sevaType || !sevaDate || !fullName || !phoneNumber || !totalAmount) {
+    if (!sevaDate || !fullName || !phoneNumber) {
       throw new HttpError(400, 'Missing required seva fields')
     }
 
@@ -34,12 +35,37 @@ sevaRouter.post('/', requireAuth, async (request, response, next) => {
       throw new HttpError(400, 'Nitya Annadan seva is managed via the donation backend (/api/annadan)')
     }
 
-    const numericAmount = Number(totalAmount)
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      throw new HttpError(400, 'Invalid total amount')
+    let numericAmount = 0
+    let resolvedSevaType = sevaType
+
+    if (sevaPackageId) {
+      const { data: sevaPackage, error: sevaPackageError } = await supabaseAdmin
+        .from('seva_packages')
+        .select('price, is_active, booking_enabled, seva_type')
+        .eq('id', sevaPackageId)
+        .is('deleted_at', null)
+        .single()
+
+      if (sevaPackageError || !sevaPackage) {
+        throw new HttpError(404, 'Seva package not found')
+      }
+      if (!sevaPackage.is_active || !sevaPackage.booking_enabled) {
+        throw new HttpError(400, 'Selected Seva package is not active or booking is disabled')
+      }
+
+      numericAmount = Number(sevaPackage.price)
+      resolvedSevaType = sevaPackage.seva_type
+    } else {
+      if (!sevaType || !totalAmount) {
+        throw new HttpError(400, 'Missing required seva fields')
+      }
+      numericAmount = Number(totalAmount)
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        throw new HttpError(400, 'Invalid total amount')
+      }
     }
 
-    const bookingReference = generateSevaReference(sevaType)
+    const bookingReference = generateSevaReference(resolvedSevaType)
     const userId = (request as AuthenticatedRequest).userId
 
     const { data, error } = await supabaseAdmin
@@ -47,7 +73,8 @@ sevaRouter.post('/', requireAuth, async (request, response, next) => {
       .insert({
         booking_reference: bookingReference,
         user_id: userId,
-        seva_type: sevaType,
+        seva_type: resolvedSevaType,
+        seva_package_id: sevaPackageId ?? null,
         seva_date: sevaDate,
         full_name: fullName,
         phone_number: phoneNumber,
@@ -109,6 +136,7 @@ sevaRouter.get('/upcoming', requireAuth, async (request, response, next) => {
       bookingReference: b.booking_reference,
       userId: b.user_id,
       sevaType: b.seva_type,
+      sevaPackageId: b.seva_package_id,
       sevaDate: b.seva_date,
       fullName: b.full_name,
       phoneNumber: b.phone_number,
@@ -145,6 +173,7 @@ sevaRouter.get('/history', requireAuth, async (request, response, next) => {
       bookingReference: b.booking_reference,
       userId: b.user_id,
       sevaType: b.seva_type,
+      sevaPackageId: b.seva_package_id,
       sevaDate: b.seva_date,
       fullName: b.full_name,
       phoneNumber: b.phone_number,
@@ -372,6 +401,7 @@ sevaRouter.get('/upcoming', optionalAuth, async (request, response, next) => {
       id: b.id,
       bookingReference: b.booking_reference,
       sevaType: b.seva_type,
+      sevaPackageId: b.seva_package_id,
       sevaDate: b.seva_date,
       fullName: b.full_name,
       phoneNumber: b.phone_number,
@@ -401,6 +431,7 @@ sevaRouter.get('/history', requireAuth, async (request, response, next) => {
       id: b.id,
       bookingReference: b.booking_reference,
       sevaType: b.seva_type,
+      sevaPackageId: b.seva_package_id,
       sevaDate: b.seva_date,
       fullName: b.full_name,
       phoneNumber: b.phone_number,

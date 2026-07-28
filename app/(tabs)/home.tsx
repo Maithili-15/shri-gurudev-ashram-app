@@ -362,7 +362,10 @@ export default function HomeRoute() {
               <MaterialIcons name="menu" size={30} color={COLORS.primary} />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>ASHRAM APP</Text>
+            <View style={styles.headerBranding}>
+              <Image source={require('../../assets/recieptLogo.jpeg')} style={styles.headerLogo} resizeMode="contain" />
+              <Text style={styles.headerTitle}>SHRI GURUDEV ASHRAM</Text>
+            </View>
 
             <TouchableOpacity onPress={() => router.push('/(tabs)/notifications' as never)}>
               <MaterialIcons name="notifications-none" size={30} color={COLORS.primary} />
@@ -372,8 +375,6 @@ export default function HomeRoute() {
           <Animated.View style={[styles.heroFadeWrap, { opacity: heroFade }]}>
             <View style={styles.heroCard}>
               <View style={styles.heroTitleBlock}>
-                <Text style={styles.heroAppTitle}>ASHRAM APP</Text>
-
                 <View style={styles.radheRow}>
                   <MaterialIcons name="music-note" size={22} color={COLORS.gold} />
                   <Text style={styles.radheText}>Radhe Radhe</Text>
@@ -440,7 +441,10 @@ export default function HomeRoute() {
 
         <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerTranslateX }] }]} {...drawerPanResponder.panHandlers}>
           <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>ASHRAM APP</Text>
+            <View style={styles.drawerBranding}>
+              <Image source={require('../../assets/recieptLogo.jpeg')} style={styles.drawerLogo} resizeMode="contain" />
+              <Text style={styles.drawerTitle}>SHRI GURUDEV ASHRAM</Text>
+            </View>
             <TouchableOpacity onPress={closeDrawer}>
               <MaterialIcons name="close" size={24} color={COLORS.primary} />
             </TouchableOpacity>
@@ -502,11 +506,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(139,90,0,0.10)',
   },
+  headerBranding: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: COLORS.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   heroFadeWrap: {
     paddingHorizontal: 22,
@@ -542,7 +556,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 10,
   },
   radheText: {
     fontSize: 28,
@@ -724,11 +737,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 18,
   },
+  drawerBranding: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  drawerLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   drawerTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   drawerItem: {
     paddingVertical: 14,
