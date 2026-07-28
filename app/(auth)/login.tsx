@@ -20,12 +20,23 @@ export default function PhoneAuthRoute() {
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ phone?: string; code?: string }>({})
 
   const codeInputRef = useRef<TextInput>(null)
+
+  React.useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown((prev) => prev - 1)
+      }, 1000)
+    }
+    return () => clearInterval(timer)
+  }, [resendCooldown])
 
   const validatePhone = () => {
     const nextErrors: typeof fieldErrors = {}
@@ -39,6 +50,23 @@ export default function PhoneAuthRoute() {
     if (code.length < 6) { nextErrors.code = 'Please enter a valid 6-digit OTP.' }
     setFieldErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
+  }
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isSubmitting) return
+    setIsSubmitting(true)
+    setErrorMessage('')
+    try {
+      const result = await requestPhoneOtp(phone)
+      setConfirmation(result)
+      setResendCooldown(45)
+      setCode('')
+      setTimeout(() => codeInputRef.current?.focus(), 100)
+    } catch (error) {
+      setErrorMessage(getFriendlyApiError(error, 'Could not resend OTP. Please try again.'))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleContinue = async () => {
@@ -57,6 +85,7 @@ export default function PhoneAuthRoute() {
       if (!confirmation) {
         const result = await requestPhoneOtp(phone)
         setConfirmation(result)
+        setResendCooldown(45)
         // Focus OTP field automatically on next render
         setTimeout(() => codeInputRef.current?.focus(), 100)
       } else {
@@ -139,6 +168,18 @@ export default function PhoneAuthRoute() {
                 maxLength={6}
               />
             )}
+
+            {confirmation ? (
+              <Pressable
+                onPress={() => void handleResendOtp()}
+                disabled={resendCooldown > 0 || isSubmitting}
+                style={{ alignSelf: 'flex-end', marginTop: 2, paddingVertical: 4 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: resendCooldown > 0 ? '#9E9080' : '#E65C00' }}>
+                  {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                </Text>
+              </Pressable>
+            ) : null}
             
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
             

@@ -2,11 +2,16 @@ import fs from 'fs'
 import path from 'path'
 import PDFDocument from 'pdfkit'
 
-const receiptDir = path.join(process.cwd(), 'backend', 'receipts')
+export function getCanonicalReceiptDir(): string {
+  const cwd = process.cwd()
+  const baseDir = path.basename(cwd) === 'backend' ? cwd : path.join(cwd, 'backend')
+  return path.resolve(baseDir, 'receipts')
+}
 
 export async function generateReceipt(donation: any) {
-  await fs.promises.mkdir(receiptDir, { recursive: true })
-  const filePath = path.join(receiptDir, `receipt_${donation._id}.pdf`)
+  const dir = getCanonicalReceiptDir()
+  await fs.promises.mkdir(dir, { recursive: true })
+  const filePath = path.join(dir, `receipt_${donation._id}.pdf`)
   await new Promise<void>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 })
     const stream = fs.createWriteStream(filePath)

@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { HttpError } from "../errors";
 import { AuthenticatedRequest, requireAuth } from "../middleware/auth";
-import { upload } from "../middleware/upload";
+import { profileImageUpload, upload } from "../middleware/upload";
 import { supabaseAdmin } from "../services/supabaseAdmin";
 import { createNotification } from "../services/notifications";
+import { NotificationType } from "../constants/notifications";
 
 export const usersRouter = Router();
 
@@ -28,23 +29,9 @@ usersRouter.put("/me", requireAuth, async (request, response, next) => {
     if (typeof body.fullName === "string")
       updates.full_name = body.fullName.trim();
     if (typeof body.phone === "string" || typeof body.phoneNumber === "string")
-      updates.phone_number = (body.phone || body.phoneNumber).trim();
-    if (typeof body.whatsappNumber === "string")
-      updates.whatsapp_number = body.whatsappNumber.trim();
+      updates.phone = (body.phone || body.phoneNumber).trim();
     if (typeof body.email === "string")
       updates.email = body.email.trim();
-    if (typeof body.dob === "string")
-      updates.dob = body.dob.trim();
-    if (typeof body.gender === "string")
-      updates.gender = body.gender.trim();
-    if (typeof body.address === "string")
-      updates.address = body.address.trim();
-    if (typeof body.emergencyContactName === "string")
-      updates.emergency_contact_name = body.emergencyContactName.trim();
-    if (typeof body.emergencyContactPhone === "string")
-      updates.emergency_contact_phone = body.emergencyContactPhone.trim();
-    if (typeof body.emergencyContactRelation === "string")
-      updates.emergency_contact_relation = body.emergencyContactRelation.trim();
     if ("profileImageUrl" in body && (body.profileImageUrl === null || typeof body.profileImageUrl === "string"))
       updates.profile_image_url = body.profileImageUrl;
     if (typeof body.pushToken === "string")
@@ -188,57 +175,37 @@ usersRouter.post(
 usersRouter.post(
   "/upload-profile-image",
   requireAuth,
-  upload.single("profileImage"),
+  profileImageUpload.single("profileImage"),
   async (request, response, next) => {
-    const fs = require('fs');
-    const authRequest = request as AuthenticatedRequest & {
-      file?: Express.Multer.File;
-    };
-
-    if (!authRequest.file) {
-      next(new HttpError(400, "No image file provided"));
-      return;
-    }
-
-    const filePath = authRequest.file.path;
-
     try {
-      const fileBuffer = fs.readFileSync(filePath);
-      const ext = authRequest.file.originalname.split('.').pop() || 'jpg';
-      const path = `${authRequest.userId}/${Date.now()}.${ext}`;
+      const authRequest = request as AuthenticatedRequest & {
+        file?: Express.Multer.File;
+      };
 
-      const { error } = await supabaseAdmin.storage
-        .from('profile-images')
-        .upload(path, fileBuffer, {
-          contentType: authRequest.file.mimetype,
-          upsert: true,
-        });
+      if (!authRequest.file) {
+        throw new HttpError(400, "No image file provided");
+      }
+
+      const relativePath = `/uploads/profile-images/${authRequest.userId}/${authRequest.file.filename}`;
+
+      const { error } = await supabaseAdmin
+        .from("users")
+        .update({ profile_image_url: relativePath })
+        .eq("id", authRequest.userId);
 
       if (error) {
-        const isBucketMissing = error.message?.toLowerCase().includes('not found') || (error as any).status === 404;
-        throw new HttpError(
-          500,
-          isBucketMissing
-            ? "Storage bucket 'profile-images' is missing or unconfigured."
-            : error.message
-        );
+        throw new HttpError(400, error.message ?? "Could not update user profile image URL");
       }
 
-      const { data } = supabaseAdmin.storage
-        .from('profile-images')
-        .getPublicUrl(path);
-
-      response.status(200).json({ publicUrl: data.publicUrl });
+      response.status(200).json({
+        publicUrl: relativePath,
+        path: relativePath,
+        url: relativePath,
+      });
     } catch (error) {
       next(error);
-    } finally {
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (_) {}
-      }
     }
-  }
+  },
 );
 
 usersRouter.post(
@@ -392,9 +359,9 @@ usersRouter.post("/admin/verifications/:targetUserId/review", requireAuth, async
     const userIdStr = String(targetUserId);
 
     if (newStatus === "verified") {
-      await createNotification(userIdStr, "Verification Approved", "Your identity verification has been approved by the Ashram administration.");
+      await createNotification(userIdStr, "Verification Approved", "Your identity verification has been approved by the Ashram administration.", NotificationType.VERIFICATION_APPROVED);
     } else {
-      await createNotification(userIdStr, "Verification Update", `Your identity verification status was updated to ${newStatus}.${notes ? ` Notes: ${notes}` : ""}`);
+      await createNotification(userIdStr, "Verification Update", `Your identity verification status was updated to ${newStatus}.${notes ? ` Notes: ${notes}` : ""}`, NotificationType.VERIFICATION_UPDATED);
     }
 
     response.json({ success: true, user: updatedUser });

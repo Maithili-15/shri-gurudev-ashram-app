@@ -1,4 +1,4 @@
-# IMPLEMENTATION.md — Shri Gurudev Ashram App
+# AUDIT.md — Shri Gurudev Ashram App
 
 **This document is the single source of truth for the Shri Gurudev Ashram platform implementation.**
 Last updated: July 2026.
@@ -288,6 +288,7 @@ Last updated: July 2026.
 |---|---|---|
 | `GET` | `/api/donations/my-donations` | List user's donation history |
 | `POST` | `/api/donations/create-order` | Create Razorpay order for donation |
+| `POST` | `/api/donations/verify-payment` | Verify Razorpay payment signature & confirm donation |
 | `GET` | `/api/donations/:id/receipt` | Download 80G donation receipt |
 | `GET` | `/api/collector/dashboard` | Fetch collector performance stats |
 | `POST` | `/api/collector/apply` | Submit collector KYC application |
@@ -784,3 +785,189 @@ Aligns navigation with Sacred Minimalism design guidelines and simplifies key us
 - [CustomTabBar.tsx](file:///c:/shri-gurudev-ashram-app/src/components/CustomTabBar.tsx)
 - [_layout.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/_layout.tsx)
 - [home.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/home.tsx)
+
+---
+
+### Decision
+Standardized `NotificationType` enum and eliminated null column errors in PostgreSQL `notifications` relation.
+
+### Reason
+Notification insertions previously omitted the `type` column required by PostgreSQL, causing notification creation failures.
+
+### Impact
+* Created `NotificationType` enum (`BOOKING_CREATED`, `BOOKING_CONFIRMED`, `BOOKING_CANCELLED`, `SEVA_CONFIRMED`, `ANNADAN_CONFIRMED`, `DONATION_SUCCESS`, `VERIFICATION_APPROVED`, `VERIFICATION_UPDATED`, `SYSTEM`) in `backend/src/constants/notifications.ts`.
+* Updated `createNotification` service and all call paths across `users.ts`, `payments.ts`, and `bookings.ts` to supply explicit `NotificationType`.
+
+### Files
+- [notifications.ts](file:///c:/shri-gurudev-ashram-app/backend/src/constants/notifications.ts)
+- [notifications.ts](file:///c:/shri-gurudev-ashram-app/backend/src/services/notifications.ts)
+- [users.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/users.ts)
+- [payments.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/payments.ts)
+- [bookings.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/bookings.ts)
+
+---
+
+### Decision
+Added explicit `/api/donations/verify-payment` endpoint and standardized Razorpay verification across all 4 modules.
+
+### Reason
+Donations relied solely on asynchronous webhooks or client timeouts. Adding server-side HMAC signature verification ensures immediate payment confirmation upon checkout.
+
+### Impact
+* Implemented `verifyDonationPayment` controller with HMAC signature check and idempotent status handling.
+* Registered `POST /api/donations/verify-payment` in Express router.
+* Integrated immediate payment verification call in `DonationScreen.tsx` right after Razorpay checkout.
+
+### Files
+- [donations.ts](file:///c:/shri-gurudev-ashram-app/backend/src/controllers/donations.ts)
+- [donations.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/donations.ts)
+- [donation.ts](file:///c:/shri-gurudev-ashram-app/src/services/donation.ts)
+- [DonationScreen.tsx](file:///c:/shri-gurudev-ashram-app/src/screens/donation/DonationScreen.tsx)
+
+---
+
+### Decision
+Centralized Timezone-Safe Date Utility (`src/utils/date.ts`) for IST (Asia/Kolkata) formatting.
+
+### Reason
+Parsing YYYY-MM-DD strings via standard `new Date("YYYY-MM-DD")` produced UTC date shifts depending on device timezones.
+
+### Impact
+* Created `formatDateIST`, `toLocalYYYYMMDD`, and `formatDateDisplay` in `src/utils/date.ts`.
+* Updated `TravelReceipt.tsx` and `SevaReceipt.tsx` to format all timestamps and dates in IST without off-by-one shifts.
+
+### Files
+- [date.ts](file:///c:/shri-gurudev-ashram-app/src/utils/date.ts)
+- [TravelReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/TravelReceipt.tsx)
+- [SevaReceipt.tsx](file:///c:/shri-gurudev-ashram-app/src/components/SevaReceipt.tsx)
+
+---
+
+### Decision
+Restricted Yatra-linked Seva date selection to package departure and return date boundaries (`start_date` – `end_date`).
+
+### Reason
+Sevas booked as add-ons during Yatra booking must occur within the Yatra's scheduled travel period.
+
+### Impact
+* Added backend boundary check in `POST /api/bookings` returning clear 400 error message if `additionalSevaDate` is outside `[start_date, end_date]`.
+* Updated `SevaInlineCalendar` in `BookingForm.tsx` to disable dates outside the package date range.
+
+### Files
+- [bookings.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/bookings.ts)
+- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
+
+---
+
+### Decision
+Standardized Phone Number Normalization and 10-digit validation.
+
+### Reason
+Inputs containing country codes (`+91`) or leading zeros caused input truncation or pattern validation failures.
+
+### Impact
+* Updated `normalizePhoneNumber` to strip `+91` and leading `0` automatically on both client and server.
+* Enforced 10-digit mobile number validation starting with digits 6–9.
+
+### Files
+- [validation.ts](file:///c:/shri-gurudev-ashram-app/src/utils/validation.ts)
+- [phone.ts](file:///c:/shri-gurudev-ashram-app/backend/src/utils/phone.ts)
+
+---
+
+### Decision
+Implemented Donation Dashboard (`app/donation-history.tsx`) and unified My Activity backend synchronization (`app/(tabs)/my-sevas.tsx`).
+
+### Reason
+Devotees required a dedicated dashboard to search/filter donations and download 80G tax receipts, and My Activity needed to reflect live backend data for all 4 modules (Travel, Seva, Annadan, Donations).
+
+### Impact
+* Built `app/donation-history.tsx` with total contribution stats, real-time search, status filter chips, and PDF receipt downloads.
+* Refactored `app/(tabs)/my-sevas.tsx` to unify Travel, Seva, Annadan, and Donation history into a single live backend ledger.
+
+### Files
+- [donation-history.tsx](file:///c:/shri-gurudev-ashram-app/app/donation-history.tsx)
+- [my-sevas.tsx](file:///c:/shri-gurudev-ashram-app/app/(tabs)/my-sevas.tsx)
+
+---
+
+### Decision
+Standardized Profile Image Upload to VPS filesystem local storage (`uploads/profile-images/`).
+
+### Reason
+Eliminated cloud storage bucket dependency mismatches by storing avatar uploads on local disk and serving statically via Express (`/uploads/*`).
+
+### Impact
+* Refactored `POST /api/users/upload-profile-image` in `users.ts` to process file uploads using `profileImageUpload` disk storage.
+* Added static file middleware in `backend/src/app.ts` (`app.use('/uploads', express.static(...))`).
+* Added support for HEIC/HEIF/JPEG/PNG/WebP formats.
+* Updated database `users.profile_image_url` on upload completion.
+
+### Files
+- [upload.ts](file:///c:/shri-gurudev-ashram-app/backend/src/middleware/upload.ts)
+- [users.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/users.ts)
+- [app.ts](file:///c:/shri-gurudev-ashram-app/backend/src/app.ts)
+
+---
+
+### Decision
+Implemented Resend OTP flow with a 45-second live countdown timer on Phone Authentication.
+
+### Reason
+Devotees who missed or delayed receiving their SMS OTP needed a clear way to request a new code without starting over.
+
+### Impact
+* Added `resendCooldown` state and interval timer in `app/(auth)/login.tsx`.
+* Rendered dynamic Resend button showing live countdown (`Resend OTP in 30s`) and triggering `requestPhoneOtp(phone)` on press.
+
+### Files
+- [login.tsx](file:///c:/shri-gurudev-ashram-app/app/(auth)/login.tsx)
+
+---
+
+### Decision
+Constrained SevaInlineCalendar month navigation to Yatra package departure and return date boundaries.
+
+### Reason
+Prevented devotees from scrolling to months outside their selected Yatra package date range during add-on Seva selection.
+
+### Impact
+* Added `canPrevMonth` and `canNextMonth` bounds checking in `BookingForm.tsx`.
+* Disabled month navigation arrows when viewing boundary months.
+
+### Files
+- [BookingForm.tsx](file:///c:/shri-gurudev-ashram-app/src/features/bookings/BookingForm.tsx)
+
+---
+
+### Decision
+Standardized canonical receipt directory path resolution and static file serving (`getCanonicalReceiptDir()`).
+
+### Reason
+Prevented duplicate or nested `backend/backend/receipts` directory creation depending on whether the server process was started from the root directory or the `backend/` subfolder.
+
+### Impact
+* Implemented `getCanonicalReceiptDir()` in `donationReceipt.ts` using `path.resolve()` to anchor receipts strictly to `<project_root>/backend/receipts`.
+* Updated `backend/src/app.ts` to automatically create and serve static files from `canonicalReceiptDir`.
+* Standardized public receipt URLs to `/receipts/<filename>`.
+
+### Files
+- [donationReceipt.ts](file:///c:/shri-gurudev-ashram-app/backend/src/services/donationReceipt.ts)
+- [app.ts](file:///c:/shri-gurudev-ashram-app/backend/src/app.ts)
+
+---
+
+### Decision
+Removed 8 legacy field assignments from `PUT /api/users/me` that targeted non-existent PostgreSQL columns, and fixed the `phone` column name.
+
+### Reason
+The handler contained executable code writing `phone_number`, `whatsapp_number`, `dob`, `gender`, `address`, `emergency_contact_name`, `emergency_contact_phone`, and `emergency_contact_relation` to `public.users`. None of these columns exist in the live database schema. Any API request containing these fields would trigger a PostgreSQL error 42703 (`column does not exist`). Additionally, the handler wrote to `phone_number` when the actual column name is `phone`.
+
+### Impact
+* Removed all 8 invalid field assignments from the `updates` object in `PUT /api/users/me`.
+* Fixed `updates.phone_number` to `updates.phone` to match the actual `public.users.phone` column.
+* The handler now only writes columns that exist in `public.users`: `full_name`, `phone`, `email`, `profile_image_url`, `push_token`.
+* No schema migration required — the bug was in the backend, not the database.
+
+### Files
+- [users.ts](file:///c:/shri-gurudev-ashram-app/backend/src/routes/users.ts)

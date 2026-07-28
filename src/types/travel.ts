@@ -13,6 +13,8 @@ export type TravelPackage = {
   trainNonAcPrice?: number;
   roomAcPrice?: number;
   roomNonAcPrice?: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'payment_pending' | 'paid';

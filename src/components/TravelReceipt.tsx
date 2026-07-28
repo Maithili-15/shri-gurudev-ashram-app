@@ -40,13 +40,10 @@ export type TravelReceiptData = {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+import { formatDateIST } from '../utils/date'
+
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'long', year: 'numeric',
-    })
-  } catch { return iso }
+  return formatDateIST(iso, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function formatAmount(amount: number): string {

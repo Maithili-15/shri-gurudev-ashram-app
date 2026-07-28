@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
 import { createNotification } from '../services/notifications'
+import { NotificationType } from '../constants/notifications'
 import { razorpay, razorpayKeySecret } from '../services/razorpay'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { logError, logInfo } from '../utils/logger'
@@ -398,7 +399,7 @@ async function captureBookingPayment(input: {
   try {
     const { data: booking } = await supabaseAdmin.from('bookings').select('*').eq('id', input.bookingId).maybeSingle()
     if (booking?.user_id) {
-      await createNotification(booking.user_id, 'Payment Successful', `Your payment for Yatra booking reference ${booking.booking_reference} was successful. Jai Shri Gurudev!`)
+      await createNotification(booking.user_id, 'Payment Successful', `Your payment for Yatra booking reference ${booking.booking_reference} was successful. Jai Shri Gurudev!`, NotificationType.BOOKING_CONFIRMED)
     }
     if (booking?.booking_reference) {
       const { data: existingSeva } = await supabaseAdmin

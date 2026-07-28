@@ -19,6 +19,8 @@ type PackageRow = {
   train_non_ac_price?: number | string | null
   room_ac_price?: number | string | null
   room_non_ac_price?: number | string | null
+  start_date?: string | null
+  end_date?: string | null
 }
 
 function parsePriceAmount(price: string | number | null | undefined) {
@@ -73,6 +75,8 @@ function mapPackageRow(row: PackageRow): TravelPackage {
     trainNonAcPrice: parsePriceAmount(row.train_non_ac_price),
     roomAcPrice: parsePriceAmount(row.room_ac_price),
     roomNonAcPrice: parsePriceAmount(row.room_non_ac_price),
+    startDate: row.start_date ?? undefined,
+    endDate: row.end_date ?? undefined,
   }
 }
 

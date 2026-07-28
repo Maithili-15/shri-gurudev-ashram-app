@@ -149,7 +149,7 @@ export async function fetchUpcomingSevas(): Promise<UpcomingSeva[]> {
 // ─── Seva History (Merging Nitya Annadan + Yajman Only) ──────────────────────
 export async function fetchSevaHistory(): Promise<SevaBooking[]> {
   const [annadanRes, yajmanRes] = await allSettled([
-    api.get('/api/annadan/history').catch(() => ({ data: [] })),
+    api.get('/api/annadan/history').then((res) => (res?.data ? res : donationApi.get('/api/annadan/history'))).catch(() => donationApi.get('/api/annadan/history').catch(() => ({ data: [] }))),
     api.get('/api/seva/history').catch(() => ({ data: [] })),
   ]);
 

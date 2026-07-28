@@ -24,12 +24,15 @@ import type { Booking } from '../../src/types/travel'
 import { useAuthStore } from '../../src/store/useAuthStore'
 import { useProtectedRoute } from '../../src/hooks/useProtectedRoute'
 
+import { getDonationHistory } from '../../src/services/donation'
+
 // ─── Categories & Tabs ────────────────────────────────────────────────────────
-type CategoryKey = 'all' | 'annadan' | 'yajman' | 'travel'
+type CategoryKey = 'all' | 'annadan' | 'yajman' | 'donation' | 'travel'
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'annadan', label: 'Annadan' },
   { key: 'yajman', label: 'Guruji Aarti' },
+  { key: 'donation', label: 'Donations' },
   { key: 'travel', label: 'Travel' },
 ]
 
@@ -42,7 +45,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 type ActivityItem = {
   id: string
-  category: 'annadan' | 'yajman' | 'travel'
+  category: 'annadan' | 'yajman' | 'donation' | 'travel'
   title: string
   subtitle: string
   date: string
@@ -51,6 +54,7 @@ type ActivityItem = {
   status: string
   rawSeva?: SevaBooking
   rawTravel?: Booking
+  rawDonation?: any
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,8 +79,10 @@ function statusColor(status: string): string {
   switch (status) {
     case 'paid':
     case 'completed':
+    case 'SUCCESS':
       return '#2F7132'
     case 'cancelled':
+    case 'FAILED':
       return '#C04545'
     default:
       return '#B97512'
@@ -84,19 +90,19 @@ function statusColor(status: string): string {
 }
 
 function itemMatchesTab(item: ActivityItem, tab: TabKey): boolean {
-  if (item.status === 'cancelled') return tab === 'cancelled'
+  if (item.status === 'cancelled' || item.status === 'FAILED') return tab === 'cancelled'
   const dateObj = new Date(item.date)
   const now = new Date()
-  if (tab === 'completed') return item.status === 'completed' || (item.status === 'paid' && dateObj < now)
-  if (tab === 'upcoming') return item.status !== 'completed' && (dateObj >= now || item.status === 'payment_pending' || item.status === 'paid')
+  if (tab === 'completed') return item.status === 'completed' || item.status === 'SUCCESS' || (item.status === 'paid' && dateObj < now)
+  if (tab === 'upcoming') return item.status !== 'completed' && item.status !== 'SUCCESS' && (dateObj >= now || item.status === 'payment_pending' || item.status === 'paid' || item.status === 'PENDING')
   return false
 }
 
 // ─── Activity Card ────────────────────────────────────────────────────────────
 function ActivityCard({ item, onPress }: { item: ActivityItem; onPress: (item: ActivityItem) => void }) {
   const sColor = statusColor(item.status)
-  const iconName = item.category === 'annadan' ? 'restaurant' : item.category === 'yajman' ? 'self-improvement' : 'directions-bus'
-  const iconColor = item.category === 'annadan' ? '#E65C00' : item.category === 'yajman' ? '#B97512' : '#2F7132'
+  const iconName = item.category === 'annadan' ? 'restaurant' : item.category === 'yajman' ? 'self-improvement' : item.category === 'donation' ? 'volunteer-activism' : 'directions-bus'
+  const iconColor = item.category === 'annadan' ? '#E65C00' : item.category === 'yajman' ? '#B97512' : item.category === 'donation' ? '#B8860B' : '#2F7132'
 
   return (
     <Pressable style={styles.card} onPress={() => onPress(item)}>
@@ -139,6 +145,7 @@ export default function MySevasRoute() {
 
   const [sevaHistory, setSevaHistory] = useState<SevaBooking[]>([])
   const [travelBookings, setTravelBookings] = useState<Booking[]>([])
+  const [donationsHistory, setDonationsHistory] = useState<any[]>([])
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('all')
   const [activeTab, setActiveTab] = useState<TabKey>('upcoming')
   const [selectedBooking, setSelectedBooking] = useState<SevaBooking | null>(null)
@@ -146,12 +153,16 @@ export default function MySevasRoute() {
   useProtectedRoute()
 
   useEffect(() => {
-    Promise.all([getBookingsByUser(), fetchSevaHistory()])
-      .then(([tb, sh]) => {
+    Promise.all([
+      getBookingsByUser().catch(() => []),
+      fetchSevaHistory().catch(() => []),
+      getDonationHistory().catch(() => []),
+    ])
+      .then(([tb, sh, dh]) => {
         setTravelBookings(tb)
         setSevaHistory(sh)
+        setDonationsHistory(Array.isArray(dh) ? dh : dh?.data || [])
       })
-      .catch(() => {})
       .finally(() => setIsLoadingData(false))
   }, [])
 
@@ -162,8 +173,8 @@ export default function MySevasRoute() {
     ...sevaHistory.map((b): ActivityItem => ({
       id: b.id,
       category: b.sevaType,
-      title: SEVA_LABELS[b.sevaType].title,
-      subtitle: SEVA_LABELS[b.sevaType].subtitle,
+      title: SEVA_LABELS[b.sevaType]?.title || 'Seva Booking',
+      subtitle: SEVA_LABELS[b.sevaType]?.subtitle || 'Spiritual Sponsorship',
       date: b.sevaDate,
       reference: b.bookingReference,
       amount: b.totalAmount,
@@ -181,6 +192,17 @@ export default function MySevasRoute() {
       status: tb.status,
       rawTravel: tb,
     })),
+    ...donationsHistory.map((d): ActivityItem => ({
+      id: d._id,
+      category: 'donation',
+      title: typeof d.donationHead?.name === 'string' ? d.donationHead.name : (d.donationHead?.name?.en || 'General Donation'),
+      subtitle: d.receiptNumber ? `80G Receipt: ${d.receiptNumber}` : '80G Tax-Exempt Donation',
+      date: d.createdAt || new Date().toISOString(),
+      reference: d.receiptNumber || String(d._id).slice(-8).toUpperCase(),
+      amount: d.amount || 0,
+      status: d.status,
+      rawDonation: d,
+    })),
   ]
 
   const filtered = allItems.filter((item) => {
@@ -193,6 +215,8 @@ export default function MySevasRoute() {
       setSelectedBooking(item.rawSeva)
     } else if (item.rawTravel) {
       router.push(`/(tabs)/travel/booking/${item.id}` as never)
+    } else if (item.category === 'donation') {
+      router.push('/donation-history' as never)
     }
   }
 

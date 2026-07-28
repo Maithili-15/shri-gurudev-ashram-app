@@ -91,6 +91,63 @@ export async function createDonationOrder(request: Request, response: Response, 
   } catch (error) { next(error) }
 }
 
+export async function verifyDonationPayment(request: Request, response: Response, next: NextFunction) {
+  try {
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, donationId } = request.body ?? {}
+    if ((!donationId && !razorpayOrderId) || !razorpayPaymentId || !razorpaySignature) {
+      throw new HttpError(400, 'Missing payment verification fields')
+    }
+
+    const query = donationId ? { _id: objectId(String(donationId)) } : { razorpayOrderId: String(razorpayOrderId) }
+    const donation = await Donation.findOne(query)
+    if (!donation) throw new HttpError(404, 'Donation record not found')
+
+    const authUser = (request as DonationRequest).donationUser
+    if (authUser && donation.user && String(donation.user) !== authUser.id) {
+      throw new HttpError(403, 'Donation does not belong to the authenticated user')
+    }
+
+    if (donation.status === 'SUCCESS') {
+      return response.json({
+        success: true,
+        status: donation.status,
+        donationId: donation._id,
+        receiptNumber: donation.receiptNumber,
+        receiptUrl: donation.receiptUrl,
+      })
+    }
+
+    const orderIdToVerify = razorpayOrderId || donation.razorpayOrderId
+    const secret = process.env.RAZORPAY_KEY_SECRET!
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${orderIdToVerify}|${razorpayPaymentId}`)
+      .digest('hex')
+
+    if (expectedSignature !== razorpaySignature) {
+      throw new HttpError(400, 'Invalid payment signature')
+    }
+
+    donation.status = 'SUCCESS'
+    donation.paymentId = razorpayPaymentId
+    donation.transactionRef = razorpayPaymentId
+    if (!donation.receiptNumber) {
+      donation.receiptNumber = `GRD-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`
+    }
+    const filePath = await generateReceipt(donation)
+    donation.receiptUrl = publicReceiptUrl(filePath)
+    await donation.save()
+
+    response.json({
+      success: true,
+      status: donation.status,
+      donationId: donation._id,
+      receiptNumber: donation.receiptNumber,
+      receiptUrl: donation.receiptUrl,
+    })
+  } catch (error) { next(error) }
+}
+
 export async function donationStatus(request: Request, response: Response, next: NextFunction) {
   try {
     const donation = await Donation.findById(objectId(String(request.params.id))).select('user status donationHead amount receiptNumber receiptToken')

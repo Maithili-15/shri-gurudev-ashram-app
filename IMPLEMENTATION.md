@@ -1,225 +1,248 @@
 # IMPLEMENTATION.md
 
-# Objective
+## Objective
 
-Complete the remaining mobile application work.
+Perform a comprehensive production-readiness audit of the entire Shri Gurudev Ashram platform.
 
-Do NOT stop after completing one item.
+This sprint is **audit only**.
 
-Continue implementing the next incomplete task until every checklist item below is finished.
+Do **not** implement fixes while auditing.
 
-Do NOT replace existing working functionality.
-
-Do NOT introduce temporary workarounds.
-
-Do NOT duplicate business logic.
-
-The backend remains the single source of truth.
-
-Mark each task complete only after it has been fully implemented.
+The objective is to identify every architectural, functional, security, database, and maintainability issue before production.
 
 ---
 
-# Phase A — Critical Fixes (Highest Priority)
+# Phase A – Architecture Audit
 
-## A1. Notification Type Failure
+## A1. Project Architecture
 
-Current error:
+Review the complete architecture.
 
-```text
-null value in column "type" of relation "notifications"
-```
+Verify:
 
-Tasks
+- Backend responsibilities
+- Mobile architecture
+- Database ownership
+- MongoDB ↔ PostgreSQL boundaries
+- Service separation
+- Dependency direction
+- Circular dependencies
+- Duplicate business logic
 
-- [ ] Find every notification creation path.
-- [ ] Ensure every notification includes a valid `type`.
-- [ ] Standardize notification types using a shared enum/constants file.
-- [ ] Update all booking/payment/verification notifications.
-- [ ] Remove duplicated notification creation logic.
+Deliverable:
 
-Goal
-
-No notification insertion should ever fail because of a missing notification type.
-
----
-
-## A2. Payment Confirmation Consistency
-
-Some payments become Confirmed immediately.
-
-Others remain Pending.
-
-Tasks
-
-- [ ] Audit Travel payment flow.
-- [ ] Audit Seva payment flow.
-- [ ] Audit Annadan payment flow.
-- [ ] Audit Donation payment flow.
-- [ ] Standardize order creation.
-- [ ] Standardize payment verification.
-- [ ] Standardize webhook processing.
-- [ ] Ensure idempotent webhook handling.
-- [ ] Prevent duplicate payment processing.
-- [ ] Ensure booking status changes exactly once.
-- [ ] Ensure payment status changes exactly once.
-
-Goal
-
-Every module should follow the same payment lifecycle.
+- Architecture findings
+- Suggested improvements
+- Priority of each issue
 
 ---
 
-## A3. Date Accuracy
+## A2. Database Audit
 
-Current issues:
+Audit every database object.
 
-- inaccurate dates
-- timezone inconsistencies
+Verify:
 
-Tasks
+- Tables
+- Columns
+- Relationships
+- Foreign keys
+- Constraints
+- Indexes
+- Enums
+- Views
+- RPCs
+- Triggers
 
-- [ ] Review all backend date storage.
-- [ ] Review frontend parsing.
-- [ ] Standardize UTC storage.
-- [ ] Standardize IST display.
-- [ ] Fix receipts.
-- [ ] Fix booking history.
-- [ ] Fix dashboards.
-- [ ] Fix review screens.
+Cross-check against:
 
-Goal
+- database.types.ts
+- Backend
+- Frontend
 
-Dates must be identical everywhere.
+Look for:
 
----
-
-## A4. Seva Booking Restrictions
-
-Yatra-linked Sevas should only be bookable during the selected Yatra.
-
-Tasks
-
-- [ ] Restrict frontend date picker.
-- [ ] Validate on backend.
-- [ ] Reject invalid dates.
-- [ ] Display clear validation message.
-
-Applies to
-
-- Guruji Aarti
-- Yajman Pad
-- Every Yatra-linked Seva
+- schema drift
+- dead columns
+- duplicate data
+- incorrect ownership
+- normalization issues
+- migration inconsistencies
 
 ---
 
-# Phase B — User Experience
+## A3. Backend Audit
 
-## B1. Autofill
+Review every API route.
 
-When signed in automatically populate:
+Verify:
 
-- [ ] Name
-- [ ] Phone
+- Validation
+- Authorization
+- Error handling
+- Transactions
+- Race conditions
+- Business rules
+- Soft delete handling
+- Payment consistency
 
-Across
+Find:
 
-- [ ] Travel
-- [ ] Seva
-- [ ] Donation
-- [ ] Nitya Annadan
-
----
-
-## B2. Phone Number
-
-Current issue:
-
-+91 causes truncation.
-
-Tasks
-
-- [ ] Separate country code.
-- [ ] Accept only 10 digits.
-- [ ] Normalize backend value.
-- [ ] Fix validation.
+- dead code
+- legacy code
+- unreachable code
+- duplicate logic
+- schema mismatches
 
 ---
 
-## B3. Required Fields
+## Phase B – Frontend Audit
 
-Where applicable require:
+## B1. React Native
 
-- [ ] Name
-- [ ] Phone
+Review:
 
-Email remains optional.
+- Navigation
+- Zustand
+- React Query
+- API integration
+- Loading states
+- Error handling
+- Offline handling
+- State synchronization
 
----
+Look for:
 
-# Phase C — Dashboard Improvements
-
-## C1. Donation Dashboard
-
-Implement
-
-- [ ] Total donations
-- [ ] Donation history
-- [ ] Payment status
-- [ ] Receipts
-- [ ] Search
-- [ ] Filters
+- stale state
+- duplicate interfaces
+- unnecessary re-renders
+- memory leaks
 
 ---
 
-## C2. Travel Dashboard
+## B2. Type Safety
 
-Display linked Seva.
+Audit:
 
-Include
+- database.types.ts
+- DTOs
+- manual interfaces
+- API response models
 
-- [ ] Seva Name
-- [ ] Date
-- [ ] Amount
-- [ ] Status
-- [ ] Navigation
+Identify:
 
----
-
-## C3. My Activity
-
-Current issue:
-
-Out of sync.
-
-Tasks
-
-- [ ] Refactor My Activity.
-- [ ] Use backend history APIs.
-- [ ] Synchronize Travel.
-- [ ] Synchronize Seva.
-- [ ] Synchronize Donations.
-- [ ] Synchronize Annadan.
-
-Goal
-
-My Activity should exactly reflect backend data.
+- duplicated models
+- unsafe casting
+- any usage
+- nullable mistakes
+- outdated interfaces
 
 ---
 
-# Completion Rules
+## Phase C – Security Audit
 
-Continue implementing tasks until every checkbox is complete.
+Review:
 
-Do not stop after finishing one section.
+- Firebase authentication
+- JWT validation
+- Authorization
+- File uploads
+- Static file serving
+- Passenger documents
+- Profile images
+- Receipt access
+- Path traversal
+- Rate limiting
+- Input validation
 
-If a task reveals additional required work, complete that work before marking the parent task complete.
+Verify every protected endpoint.
 
-Maintain existing architecture:
+---
 
-- Backend is authoritative.
-- No duplicated business logic.
-- No placeholder implementations.
-- No temporary fixes.
+## Phase D – Payments Audit
 
-Only stop when every task in this document has been completed.
+Review the complete payment lifecycle.
+
+Verify:
+
+- Razorpay order creation
+- HMAC verification
+- Webhook processing
+- Idempotency
+- Booking consistency
+- Seat locking
+- Duplicate payments
+- Failed payments
+- Refund flow
+
+Challenge every assumption.
+
+---
+
+## Phase E – Documentation Audit
+
+Review:
+
+- AUDIT.md
+- IMPLEMENTATION.md
+
+Verify documentation matches the implementation.
+
+Find:
+
+- outdated sections
+- undocumented endpoints
+- undocumented schema changes
+- undocumented features
+
+---
+
+# Rules
+
+- Audit only.
+- Do NOT implement fixes.
+- Do NOT modify source code.
+- Do NOT edit documentation.
+- Verify every finding with evidence.
+- Do not speculate.
+- If something cannot be verified, explicitly state that.
+
+---
+
+# Deliverables
+
+For every issue provide:
+
+- Title
+- Category
+- Severity (Critical / High / Medium / Low)
+- Confidence (High / Medium / Low)
+- Files affected
+- Evidence
+- Why it is a problem
+- Recommended fix
+- Should this block production? (Yes / No)
+
+---
+
+# Final Report
+
+Provide:
+
+- Architecture Score (/10)
+- Database Score (/10)
+- Backend Score (/10)
+- Frontend Score (/10)
+- Security Score (/10)
+- Type Safety Score (/10)
+- Documentation Score (/10)
+- Production Readiness Score (/10)
+
+Also produce:
+
+- Top 20 Issues (ranked)
+- Top 10 Quick Wins
+- Top 10 Long-Term Improvements
+- Items Safe to Ignore
+
+Finally, recommend the optimal implementation order for all identified issues based on risk, impact, and development effort.

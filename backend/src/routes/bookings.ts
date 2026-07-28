@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { HttpError } from '../errors'
 import { AuthenticatedRequest, requireAuth } from '../middleware/auth'
 import { createNotification } from '../services/notifications'
+import { NotificationType } from '../constants/notifications'
 import { supabaseAdmin } from '../services/supabaseAdmin'
 import { logError, logInfo } from '../utils/logger'
 
@@ -124,7 +125,7 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
     // 4. Package information validation
     const { data: travelPackage, error: packageError } = await supabaseAdmin
       .from('travel_packages')
-      .select('id, price, is_active, remaining_seats, flight_price, train_ac_price, train_non_ac_price, room_ac_price, room_non_ac_price')
+      .select('id, price, is_active, remaining_seats, flight_price, train_ac_price, train_non_ac_price, room_ac_price, room_non_ac_price, start_date, end_date')
       .eq('id', packageId)
       .single()
 
@@ -170,6 +171,13 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
       }
       if (!additionalSevaDate || !/^\d{4}-\d{2}-\d{2}$/.test(additionalSevaDate)) {
         throw new HttpError(400, 'additionalSevaDate is required in YYYY-MM-DD format')
+      }
+
+      if (travelPackage.start_date && additionalSevaDate < travelPackage.start_date) {
+        throw new HttpError(400, `Seva date (${additionalSevaDate}) cannot be earlier than Yatra departure date (${travelPackage.start_date}).`)
+      }
+      if (travelPackage.end_date && additionalSevaDate > travelPackage.end_date) {
+        throw new HttpError(400, `Seva date (${additionalSevaDate}) cannot be later than Yatra return date (${travelPackage.end_date}).`)
       }
 
       additionalSevaPrice = additionalSevaType === 'guruji_aarti' ? 2100 : Number(process.env.YAJMAN_SEVA_PRICE ?? 5100)
@@ -255,7 +263,7 @@ bookingsRouter.post('/', requireAuth, async (request, response, next) => {
 
     logInfo('Travel', `Travel Booking created: ${booking.id}`, { bookingId: booking.id, bookingReference, totalAmount })
     if (authRequest.userId) {
-      await createNotification(authRequest.userId, 'Booking Created', `Your Yatra booking reference ${bookingReference} has been created and is pending payment.`)
+      await createNotification(authRequest.userId, 'Booking Created', `Your Yatra booking reference ${bookingReference} has been created and is pending payment.`, NotificationType.BOOKING_CREATED)
     }
 
     try {
